@@ -309,6 +309,7 @@ declare global {
        * @param opts
        */
       registerOidc(opts: {
+        app: string
         email?: string
         website?: string
         scopes?: Array<string>
@@ -326,6 +327,7 @@ declare global {
        * @param opts
        */
       loginOidc(opts: {
+        app: string
         expectSession?: boolean
         url?: string
       }): Chainable<void>
