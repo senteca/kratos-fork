@@ -181,35 +181,44 @@ func CheckE2EServerOnHTTPS(t *testing.T, publicPort, adminPort int) (publicUrl, 
 	return
 }
 
-func GenerateTLSCertificateFilesForTests(t *testing.T, certPath, keyPath string) {
+// GenerateTLSCertificateFilesForTests writes a new, self-signed TLS
+// certificate+key (in PEM format) to a temporary location on disk and returns
+// the paths to both. The files are automatically cleaned up when the given
+// *testing.T concludes its tests.
+func GenerateTLSCertificateFilesForTests(t *testing.T) (certPath, keyPath string) {
+	tmpDir := t.TempDir()
+
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
 	cert, err := tlsx.CreateSelfSignedCertificate(privateKey)
 	require.NoError(t, err)
 
-	certOut, err := os.Create(certPath)
-	require.NoError(t, err, "Failed to open cert.pem for writing: %v", err)
+	certOut, err := os.CreateTemp(tmpDir, "test-*-cert.pem")
+	require.NoError(t, err, "Failed to create temp file for certificate: %v", err)
+	certPath = certOut.Name()
 
 	err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
-	require.NoError(t, err, "Failed to write data to cert.pem: %v", err)
+	require.NoError(t, err, "Failed to write data to %q: %v", certPath, err)
 
 	err = certOut.Close()
-	require.NoError(t, err, "Error closing cert.pem: %v", err)
+	require.NoError(t, err, "Error closing %q: %v", certPath, err)
 
-	t.Logf("wrote cert.pem")
+	t.Log("wrote", certPath)
 
-	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	require.NoError(t, err, "Failed to open key.pem for writing: %v", err)
+	keyOut, err := os.CreateTemp(tmpDir, "test-*-key.pem")
+	require.NoError(t, err, "Failed to create temp file for key: %v", err)
+	keyPath = keyOut.Name()
 
 	privBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	require.NoError(t, err, "Unable to marshal private key: %v", err)
+	require.NoError(t, err, "Failed to marshal private key: %v", err)
 
 	err = pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
-	require.NoError(t, err, "Failed to write data to key.pem: %v", err)
+	require.NoError(t, err, "Failed to write data to %q: %v", keyPath, err)
 
 	err = keyOut.Close()
-	require.NoError(t, err, "Error closing key.pem: %v", err)
+	require.NoError(t, err, "Error closing %q: %v", keyPath, err)
 
-	t.Logf("wrote key.pem")
+	t.Log("wrote", keyPath)
+	return
 }
