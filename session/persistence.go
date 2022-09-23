@@ -21,7 +21,7 @@ type PersistenceProvider interface {
 
 type Persister interface {
 	// GetSession retrieves a session from the store.
-	GetSession(ctx context.Context, sid uuid.UUID) (*Session, error)
+	GetSession(ctx context.Context, sid uuid.UUID, expandables Expandables) (*Session, error)
 
 	// ListSessionsByIdentity retrieves sessions for an identity from the store.
 	ListSessionsByIdentity(ctx context.Context, iID uuid.UUID, active *bool, page, perPage int, except uuid.UUID) ([]*Session, error)
@@ -70,7 +70,7 @@ func TestPersister(ctx context.Context, conf *config.Config, p interface {
 		})
 
 		t.Run("case=not found", func(t *testing.T) {
-			_, err := p.GetSession(ctx, x.NewUUID())
+			_, err := p.GetSession(ctx, x.NewUUID(), ExpandNothing)
 			require.Error(t, err)
 		})
 
@@ -98,7 +98,7 @@ func TestPersister(ctx context.Context, conf *config.Config, p interface {
 			}
 
 			t.Run("method=get by id", func(t *testing.T) {
-				check(p.GetSession(ctx, expected.ID))
+				check(p.GetSession(ctx, expected.ID, ExpandNothing))
 			})
 
 			t.Run("method=get by token", func(t *testing.T) {
@@ -113,7 +113,7 @@ func TestPersister(ctx context.Context, conf *config.Config, p interface {
 			require.NoError(t, p.UpsertSession(ctx, &expected))
 
 			require.NoError(t, p.DeleteSession(ctx, expected.ID))
-			_, err := p.GetSession(ctx, expected.ID)
+			_, err := p.GetSession(ctx, expected.ID, ExpandNothing)
 			require.Error(t, err)
 		})
 
@@ -124,7 +124,7 @@ func TestPersister(ctx context.Context, conf *config.Config, p interface {
 			require.NoError(t, p.UpsertSession(ctx, &expected))
 
 			require.NoError(t, p.DeleteSessionByToken(ctx, expected.Token))
-			_, err := p.GetSession(ctx, expected.ID)
+			_, err := p.GetSession(ctx, expected.ID, ExpandNothing)
 			require.Error(t, err)
 		})
 
@@ -135,13 +135,13 @@ func TestPersister(ctx context.Context, conf *config.Config, p interface {
 			require.NoError(t, p.CreateIdentity(ctx, expected.Identity))
 			require.NoError(t, p.UpsertSession(ctx, &expected))
 
-			actual, err := p.GetSession(ctx, expected.ID)
+			actual, err := p.GetSession(ctx, expected.ID, ExpandNothing)
 			require.NoError(t, err)
 			assert.True(t, actual.Active)
 
 			require.NoError(t, p.RevokeSessionByToken(ctx, expected.Token))
 
-			actual, err = p.GetSession(ctx, expected.ID)
+			actual, err = p.GetSession(ctx, expected.ID, ExpandNothing)
 			require.NoError(t, err)
 			assert.False(t, actual.Active)
 		})
@@ -160,9 +160,9 @@ func TestPersister(ctx context.Context, conf *config.Config, p interface {
 			require.NoError(t, p.UpsertSession(ctx, &expected2))
 
 			require.NoError(t, p.DeleteSessionsByIdentity(ctx, expected2.IdentityID))
-			_, err := p.GetSession(ctx, expected1.ID)
+			_, err := p.GetSession(ctx, expected1.ID, ExpandNothing)
 			require.Error(t, err)
-			_, err = p.GetSession(ctx, expected2.ID)
+			_, err = p.GetSession(ctx, expected2.ID, ExpandNothing)
 			require.Error(t, err)
 		})
 	}
