@@ -1,13 +1,5 @@
 steps:
-  - id: "Build in GCP"
-    name: 'gcr.io/cloud-builders/docker'
-    args:
-      - --destination=gcr.io/$PROJECT_ID/kratos-fork-image:$TAG_NAME
-      - --build-arg
-      - APP_VERSION=$TAG_NAME
-      - --build-arg
-      - SERVICE=kratos-fork
-options:
-  logging: CLOUD_LOGGING_ONLY
-  machineType: 'E2_HIGHCPU_8'
-timeout: 3600s
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/kratos-fork/kratos-fork:tag1', '.' ]
+images:
+- 'gcr.io/$PROJECT_ID/kratos-fork/kratos-fork-image:tag1'
