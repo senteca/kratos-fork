@@ -1,0 +1,15 @@
+steps:
+  - id: "Build in GCP"
+    name: 'gcr.io/kaniko-project/executor:latest'
+    args:
+      - --destination=gcr.io/$PROJECT_ID/kratos-fork-image:$TAG_NAME
+      - --cache-repo=gcr.io/$PROJECT_ID/kratos-cache
+      - --cache=true
+      - --build-arg
+      - APP_VERSION=$TAG_NAME
+      - --build-arg
+      - SERVICE=kratos-fork
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+timeout: 3600s
