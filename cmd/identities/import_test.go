@@ -1,3 +1,6 @@
+// Copyright © 2022 Ory Corp
+// SPDX-License-Identifier: Apache-2.0
+
 package identities_test
 
 import (
@@ -6,8 +9,6 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
-
-	"github.com/spf13/cobra"
 
 	"github.com/ory/kratos/cmd/identities"
 
@@ -21,7 +22,7 @@ import (
 )
 
 func TestImportCmd(t *testing.T) {
-	c := identities.NewImportIdentitiesCmd(new(cobra.Command))
+	c := identities.NewImportIdentitiesCmd()
 	reg := setup(t, c)
 
 	t.Run("case=imports a new identity from file", func(t *testing.T) {

@@ -12,7 +12,6 @@ export VCS_REF            := $(shell git rev-parse HEAD)
 export QUICKSTART_OPTIONS ?= ""
 
 GO_DEPENDENCIES = github.com/ory/go-acc \
-				  github.com/ory/x/tools/listx \
 				  github.com/golang/mock/mockgen \
 				  github.com/go-swagger/go-swagger/cmd/swagger \
 				  golang.org/x/tools/cmd/goimports \
@@ -47,19 +46,15 @@ docs/api:
 docs/swagger:
 	npx @redocly/openapi-cli preview-docs spec/swagger.json
 
-.bin/ory: Makefile
-	bash <(curl https://raw.githubusercontent.com/ory/meta/master/install.sh) -d -b .bin ory v0.1.33
-	touch -a -m .bin/ory
-
-node_modules: package.json
-	npm ci
-	touch node_modules
-
 .bin/golangci-lint: Makefile
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -d -b .bin v1.47.3
 
 .bin/hydra: Makefile
 	bash <(curl https://raw.githubusercontent.com/ory/meta/master/install.sh) -d -b .bin hydra v1.11.0
+
+.bin/ory: Makefile
+	curl https://raw.githubusercontent.com/ory/meta/master/install.sh | bash -s -- -b .bin ory v0.1.47
+	touch .bin/ory
 
 .PHONY: lint
 lint: .bin/golangci-lint
@@ -106,6 +101,7 @@ sdk: .bin/swagger .bin/ory node_modules
 			-p file://.schema/openapi/patches/identity.yaml \
 			-p file://.schema/openapi/patches/courier.yaml \
 			-p file://.schema/openapi/patches/generic_error.yaml \
+			-p file://.schema/openapi/patches/nulls.yaml \
 			-p file://.schema/openapi/patches/common.yaml \
 			spec/swagger.json spec/api.json
 
@@ -135,7 +131,8 @@ quickstart-dev:
 
 # Formats the code
 .PHONY: format
-format: .bin/goimports node_modules
+format: .bin/goimports .bin/ory node_modules
+	.bin/ory dev headers license --exclude=internal/httpclient
 	goimports -w -local github.com/ory .
 	npm exec -- prettier --write 'test/e2e/**/*{.ts,.js}'
 	npm exec -- prettier --write '.github'
@@ -172,3 +169,13 @@ post-release: .bin/yq
 	cat quickstart.yml | yq '.services.kratos.image = "oryd/kratos:'$$DOCKER_TAG'"' | sponge quickstart.yml
 	cat quickstart.yml | yq '.services.kratos-migrate.image = "oryd/kratos:'$$DOCKER_TAG'"' | sponge quickstart.yml
 	cat quickstart.yml | yq '.services.kratos-selfservice-ui-node.image = "oryd/kratos-selfservice-ui-node:'$$DOCKER_TAG'"' | sponge quickstart.yml
+
+licenses: .bin/licenses node_modules  # checks open-source licenses
+	.bin/licenses
+
+.bin/licenses: Makefile
+	curl https://raw.githubusercontent.com/ory/ci/master/licenses/install | sh
+
+node_modules: package-lock.json
+	npm ci
+	touch node_modules
