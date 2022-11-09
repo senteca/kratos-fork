@@ -1,3 +1,6 @@
+// Copyright © 2022 Ory Corp
+// SPDX-License-Identifier: Apache-2.0
+
 import { APP_URL, appPrefix, gen, parseHtml } from "../../../../helpers"
 import { routes as react } from "../../../../helpers/react"
 import { routes as express } from "../../../../helpers/express"
@@ -28,6 +31,9 @@ context("Account Recovery Errors", () => {
         cy.longLinkLifespan()
         cy.disableVerification()
         cy.enableRecovery()
+        cy.useRecoveryStrategy("link")
+        cy.disableRecoveryStrategy("code")
+        cy.clearAllCookies()
       })
 
       it("responds with a HTML response on link click of an API flow if the link is expired", () => {
@@ -106,6 +112,10 @@ context("Account Recovery Errors", () => {
       it("should cause form errors", () => {
         cy.visit(recovery)
 
+        // we need to remove the required attribute of the element since the browser prevents us from submitting the form
+        // this is to simulate the case where the form is submitted with an empty input field.
+        cy.removeAttribute(["input[name='email']"], "required")
+
         cy.get('button[value="link"]').click()
         cy.get('[data-testid="ui/message/4000002"]').should(
           "contain.text",
@@ -116,9 +126,15 @@ context("Account Recovery Errors", () => {
 
       it("should cause non-repeating form errors after submitting empty form twice. see: #2512", () => {
         cy.visit(recovery)
+        // we need to remove the required attribute of the element since the browser prevents us from submitting the form
+        // this is to simulate the case where the form is submitted with an empty input field.
+        cy.removeAttribute(["input[name='email']"], "required")
         cy.get('button[value="link"]').click()
         cy.location("pathname").should("eq", "/recovery")
 
+        // we need to remove the required attribute of the element since the browser prevents us from submitting the form
+        // this is to simulate the case where the form is submitted with an empty input field.
+        cy.removeAttribute(["input[name='email']"], "required")
         cy.get('button[value="link"]').click()
         cy.get('[data-testid="ui/message/4000002"]').should(
           "contain.text",

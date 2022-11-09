@@ -1,3 +1,6 @@
+// Copyright © 2022 Ory Corp
+// SPDX-License-Identifier: Apache-2.0
+
 package identity
 
 import (
@@ -317,6 +320,14 @@ func (i *Identity) UnmarshalJSON(b []byte) error {
 	i.Credentials = nil
 	i.MetadataAdmin = nil
 	return err
+}
+
+type WithAdminMetadataInJSON Identity
+
+func (i WithAdminMetadataInJSON) MarshalJSON() ([]byte, error) {
+	type localIdentity Identity
+	i.Credentials = nil
+	return json.Marshal(localIdentity(i))
 }
 
 type WithCredentialsAndAdminMetadataInJSON Identity

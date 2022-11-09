@@ -1,3 +1,6 @@
+// Copyright © 2022 Ory Corp
+// SPDX-License-Identifier: Apache-2.0
+
 import { appPrefix, assertRecoveryAddress, gen } from "../../../../helpers"
 import { routes as react } from "../../../../helpers/react"
 import { routes as express } from "../../../../helpers/express"
@@ -32,6 +35,7 @@ context("Account Recovery Success", () => {
         cy.longLinkLifespan()
         cy.disableVerification()
         cy.enableRecovery()
+        cy.useRecoveryStrategy("link")
 
         identity = gen.identityWithWebsite()
         cy.registerApi(identity)

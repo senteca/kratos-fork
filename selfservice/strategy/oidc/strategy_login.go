@@ -1,3 +1,6 @@
+// Copyright © 2022 Ory Corp
+// SPDX-License-Identifier: Apache-2.0
+
 package oidc
 
 import (
@@ -96,6 +99,11 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login
 
 			// This flow only works for browsers anyways.
 			aa, err := s.d.RegistrationHandler().NewRegistrationFlow(w, r, flow.TypeBrowser, opts...)
+			if err != nil {
+				return nil, s.handleError(w, r, a, provider.Config().ID, nil, err)
+			}
+
+			aa.RequestURL, err = x.TakeOverReturnToParameter(a.RequestURL, aa.RequestURL)
 			if err != nil {
 				return nil, s.handleError(w, r, a, provider.Config().ID, nil, err)
 			}
