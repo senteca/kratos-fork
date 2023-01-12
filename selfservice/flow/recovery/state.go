@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package recovery
@@ -11,7 +11,7 @@ package recovery
 // - sent_email: the email has been sent to the user
 // - passed_challenge: the request was successful and the recovery challenge was passed.
 //
-// swagger:model selfServiceRecoveryFlowState
+// swagger:model recoveryFlowState
 type State string
 
 const (

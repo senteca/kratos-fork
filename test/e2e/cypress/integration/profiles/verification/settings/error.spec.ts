@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 import {
@@ -41,7 +41,7 @@ context("Account Verification Settings Error", () => {
         })
 
         beforeEach(() => {
-          cy.longLinkLifespan()
+          cy.longCodeLifespan()
           identity = gen.identityWithWebsite()
           cy.clearAllCookies()
           cy.registerApi(identity)
@@ -52,7 +52,7 @@ context("Account Verification Settings Error", () => {
         })
 
         it("is unable to verify the email address if the code is no longer valid", () => {
-          cy.shortLinkLifespan()
+          cy.shortCodeLifespan()
           cy.visit(settings)
 
           const email = `not-${identity.email}`

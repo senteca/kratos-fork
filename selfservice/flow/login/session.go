@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -7,7 +7,7 @@ import "github.com/ory/kratos/session"
 
 // The Response for Login Flows via API
 //
-// swagger:model successfulSelfServiceLoginWithoutBrowser
+// swagger:model successfulNativeLogin
 type APIFlowResponse struct {
 	// The Session Token
 	//

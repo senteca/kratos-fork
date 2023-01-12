@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 // nolint:deadcode,unused
@@ -10,8 +10,8 @@ import "github.com/ory/herodot"
 //
 // The standard Ory JSON API error format.
 //
-// swagger:model jsonError
-type jsonError struct {
+// swagger:model errorGeneric
+type errorGeneric struct {
 	// Contains error details
 	//
 	// required: true

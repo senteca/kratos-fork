@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package settings
@@ -40,7 +40,7 @@ import (
 //
 // We recommend reading the [User Settings Documentation](../self-service/flows/user-settings)
 //
-// swagger:model selfServiceSettingsFlow
+// swagger:model settingsFlow
 type Flow struct {
 	// ID represents the flow's unique ID. When performing the settings flow, this
 	// represents the id in the settings ui's query parameter: http://<selfservice.flows.settings.ui_url>?flow=<id>

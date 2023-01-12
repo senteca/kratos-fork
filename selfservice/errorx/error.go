@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package errorx
@@ -12,7 +12,7 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-// swagger:model selfServiceError
+// swagger:model flowError
 type ErrorContainer struct {
 	// ID of the error container.
 	//

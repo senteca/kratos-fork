@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package registrationhelpers
@@ -20,10 +20,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
-	kratos "github.com/ory/kratos-client-go"
 	"github.com/ory/kratos/driver"
 	"github.com/ory/kratos/driver/config"
 	"github.com/ory/kratos/internal"
+	kratos "github.com/ory/kratos/internal/httpclient"
 	"github.com/ory/kratos/internal/testhelpers"
 	"github.com/ory/kratos/selfservice/flow"
 	"github.com/ory/kratos/selfservice/flow/registration"
@@ -417,7 +417,7 @@ func AssertCommonErrorCases(t *testing.T, reg *driver.RegistryDefault, flows []s
 			assert.Contains(t, gjson.Get(actual, "message").String(), "Unable to locate the resource", "%s", actual)
 		}
 
-		fakeFlow := &kratos.SelfServiceRegistrationFlow{Ui: kratos.UiContainer{
+		fakeFlow := &kratos.RegistrationFlow{Ui: kratos.UiContainer{
 			Action: publicTS.URL + registration.RouteSubmitFlow + "?flow=" + x.NewUUID().String(),
 		}}
 

@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package courier
@@ -109,7 +109,12 @@ func Watch(ctx cx.Context, r driver.Registry) error {
 
 	r.Logger().Println("Courier worker started.")
 	if err := graceful.Graceful(func() error {
-		return r.Courier(ctx).Work(ctx)
+		c, err := r.Courier(ctx)
+		if err != nil {
+			return err
+		}
+
+		return c.Work(ctx)
 	}, func(_ cx.Context) error {
 		cancel()
 		return nil
