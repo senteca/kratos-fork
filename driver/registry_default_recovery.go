@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package driver
@@ -80,7 +80,7 @@ func (m *RegistryDefault) PostRecoveryHooks(ctx context.Context) (b []recovery.P
 	return
 }
 
-func (m *RegistryDefault) RecoveryCodeSender() *code.RecoveryCodeSender {
+func (m *RegistryDefault) CodeSender() *code.Sender {
 	if m.selfserviceCodeSender == nil {
 		m.selfserviceCodeSender = code.NewSender(m)
 	}

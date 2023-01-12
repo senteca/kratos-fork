@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package text
@@ -10,6 +10,7 @@ const (
 	ErrIDSelfServiceFlowExpired                        = "self_service_flow_expired"
 	ErrIDSelfServiceFlowDisabled                       = "self_service_flow_disabled"
 	ErrIDSelfServiceBrowserLocationChangeRequiredError = "browser_location_change_required"
+	ErrIDSelfServiceFlowReplaced                       = "self_service_flow_replaced"
 
 	ErrIDAlreadyLoggedIn             = "session_already_available"
 	ErrIDAddressNotVerified          = "session_verified_address_required"

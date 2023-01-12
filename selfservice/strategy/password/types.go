@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package password
@@ -7,10 +7,10 @@ import (
 	"github.com/ory/kratos/ui/container"
 )
 
-// submitSelfServiceLoginFlowWithPasswordMethodBody is used to decode the login form payload.
+// Update Login Flow with Password Method
 //
-// swagger:model submitSelfServiceLoginFlowWithPasswordMethodBody
-type submitSelfServiceLoginFlowWithPasswordMethodBody struct {
+// swagger:model updateLoginFlowWithPasswordMethod
+type updateLoginFlowWithPasswordMethod struct {
 	// Method should be set to "password" when logging in using the identifier and password strategy.
 	//
 	// required: true

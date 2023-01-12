@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package registration
@@ -10,7 +10,7 @@ import (
 
 // The Response for Registration Flows via API
 //
-// swagger:model successfulSelfServiceRegistrationWithoutBrowser
+// swagger:model successfulNativeRegistration
 type APIFlowResponse struct {
 	// The Session Token
 	//

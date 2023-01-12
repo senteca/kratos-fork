@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -6,6 +6,10 @@ package oidc
 import (
 	"context"
 	"net/url"
+
+	"github.com/pkg/errors"
+
+	"github.com/ory/herodot"
 
 	"golang.org/x/oauth2"
 
@@ -58,4 +62,15 @@ type Claims struct {
 	Language  string `json:"language,omitempty"`
 	// Possibly we will need to find a way to extract also nested fields for the claims
 	// e.g. ClientBussinessEmail string `json:"users[0].clients[0].business_email,omitempty"`
+}
+
+// Validate checks if the claims are valid.
+func (c *Claims) Validate() error {
+	if c.Subject == "" {
+		return errors.WithStack(herodot.ErrInternalServerError.WithReasonf("provider did not return a subject"))
+	}
+	if c.Issuer == "" {
+		return errors.WithStack(herodot.ErrInternalServerError.WithReasonf("issuer not set in claims"))
+	}
+	return nil
 }

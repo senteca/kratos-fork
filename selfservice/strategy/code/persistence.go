@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package code
@@ -18,5 +18,15 @@ type (
 
 	RecoveryCodePersistenceProvider interface {
 		RecoveryCodePersister() RecoveryCodePersister
+	}
+
+	VerificationCodePersister interface {
+		CreateVerificationCode(context.Context, *CreateVerificationCodeParams) (*VerificationCode, error)
+		UseVerificationCode(context.Context, uuid.UUID, string) (*VerificationCode, error)
+		DeleteVerificationCodesOfFlow(context.Context, uuid.UUID) error
+	}
+
+	VerificationCodePersistenceProvider interface {
+		VerificationCodePersister() VerificationCodePersister
 	}
 )

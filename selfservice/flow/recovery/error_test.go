@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package recovery_test
@@ -86,7 +86,7 @@ func TestHandleError(t *testing.T) {
 		defer res.Body.Close()
 		require.Contains(t, res.Request.URL.String(), conf.SelfServiceFlowErrorURL(ctx).String()+"?id=")
 
-		sse, _, err := sdk.V0alpha2Api.GetSelfServiceError(context.Background()).Id(res.Request.URL.Query().Get("id")).Execute()
+		sse, _, err := sdk.FrontendApi.GetFlowError(context.Background()).Id(res.Request.URL.Query().Get("id")).Execute()
 		require.NoError(t, err)
 
 		return sse.Error, nil

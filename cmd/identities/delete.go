@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package identities
@@ -47,7 +47,7 @@ func NewDeleteIdentityCmd() *cobra.Command {
 			)
 
 			for _, a := range args {
-				_, err := c.V0alpha2Api.AdminDeleteIdentity(cmd.Context(), a).Execute()
+				_, err := c.IdentityApi.DeleteIdentity(cmd.Context(), a).Execute()
 				if err != nil {
 					failed[a] = cmdx.PrintOpenAPIError(cmd, err)
 					continue

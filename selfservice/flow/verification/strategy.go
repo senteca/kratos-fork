@@ -1,4 +1,4 @@
-// Copyright © 2022 Ory Corp
+// Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
 package verification
@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ory/kratos/identity"
 	"github.com/ory/kratos/ui/node"
 
 	"github.com/pkg/errors"
@@ -16,6 +17,7 @@ import (
 
 const (
 	StrategyVerificationLinkName = "link"
+	StrategyVerificationCodeName = "code"
 )
 
 type (
@@ -24,6 +26,7 @@ type (
 		VerificationNodeGroup() node.UiNodeGroup
 		PopulateVerificationMethod(*http.Request, *Flow) error
 		Verify(w http.ResponseWriter, r *http.Request, f *Flow) (err error)
+		SendVerificationEmail(context.Context, *Flow, *identity.Identity, *identity.VerifiableAddress) error
 	}
 	AdminHandler interface {
 		RegisterAdminVerificationRoutes(admin *x.RouterAdmin)
@@ -35,6 +38,7 @@ type (
 	StrategyProvider interface {
 		VerificationStrategies(ctx context.Context) Strategies
 		AllVerificationStrategies() Strategies
+		GetActiveVerificationStrategy(context.Context) (Strategy, error)
 	}
 )
 
