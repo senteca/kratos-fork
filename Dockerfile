@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:1-experimental
-FROM golang:1.18-alpine3.16 AS base
+FROM golang:1.19-alpine3.16 AS base
 
 RUN apk --update upgrade && apk --no-cache --update-cache --upgrade --latest add ca-certificates build-base gcc
 
@@ -8,6 +8,7 @@ WORKDIR /go/src/github.com/ory/kratos
 ADD go.mod go.mod
 ADD go.sum go.sum
 ADD internal/httpclient/go.* internal/httpclient/
+ADD internal/client-go/go.* internal/client-go/
 
 ENV GO111MODULE on
 ENV CGO_ENABLED 1
@@ -32,6 +33,7 @@ RUN addgroup -S ory; \
     chown -R ory:ory /home/ory
 
 COPY --from=base /usr/bin/kratos /usr/bin/kratos
+COPY econt.jsonnet /usr/bin/econt.jsonnet
 
 # By creating the sqlite folder as the ory user, the mounted volume will be owned by ory:ory, which
 # is required for read/write of SQLite.
