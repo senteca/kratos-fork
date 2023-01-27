@@ -6,9 +6,9 @@ steps:
       - '-c'
       - |
         export DOCKER_BUILDKIT=1 && \
-        docker build -f Dockerfile -t gcr.io/$PROJECT_ID/kratos-fork-image:latest --build-arg BUILDKIT_INLINE_CACHE=1 .
+        docker build -f Dockerfile --build-arg BUILDKIT_INLINE_CACHE=1 .
 images:
-  - 'gcr.io/$PROJECT_ID/kratos-fork-image:latest'
+  - 'gcr.io/$PROJECT_ID/kratos-fork:latest'
 options:
   logging: CLOUD_LOGGING_ONLY
 timeout: 3600s
