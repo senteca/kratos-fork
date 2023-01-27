@@ -6,7 +6,7 @@ steps:
       - '-c'
       - |
         export DOCKER_BUILDKIT=1 && \
-        docker build -f Dockerfile --build-arg BUILDKIT_INLINE_CACHE=1 .
+        docker build -f Dockerfile -t gcr.io/$PROJECT_ID/kratos-fork:latest --build-arg BUILDKIT_INLINE_CACHE=1 .
 images:
   - 'gcr.io/$PROJECT_ID/kratos-fork:latest'
 options:
