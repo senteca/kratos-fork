@@ -5,7 +5,7 @@ version: master
 ciphers:
   algorithm: xchacha20-poly1305
 cookies:
-  domain: (localhost|github.com)
+  domain: localhost
   #   # path: /.ory/kratos
   path: /
   # same_site: Lax
@@ -26,11 +26,8 @@ selfservice:
   allowed_return_urls:
     - http://localhost:4005/auth
     - http://localhost:4010/admin
-    - https://github.com
   default_browser_return_url: http://localhost:4005/auth/
   methods:
-    # password:
-    #   enabled: true
     oidc:
       enabled: true
       config:
@@ -38,21 +35,19 @@ selfservice:
         providers:
           - id: econt
             provider: econt
-            client_id: f93yqURXa
+            client_id: f93yqURXa # PRODUCTION
+            # client_id: vky2Lu487 # NEW DEMO
             mapper_url:  file:///Users/petargeorgiev/Documents/Senteca/v3-repos/kratos-fork/econt.jsonnet
-            client_secret: Xsxjy4ydPEHRVWXa9G
+            client_secret: Xsxjy4ydPEHRVWXa9G # PRODUCTION
+            # client_secret: jWHk72Te92tZJehBtx # NEW DEMO
             issuer_url: https://login.econt.com
             auth_url: https://login.econt.com/oauth2/auth
             token_url: https://login.econt.com/oauth2/token
             scope:
               - read
             requested_claims:
-              name: name
-              name_en: name_en
               email: email
               # users: users
-              lang: lang
-              language: language
               user_name: user_name
               account_id: account_id
   flows:
@@ -79,16 +74,21 @@ selfservice:
       ui_url: http://localhost:4005/auth/login
       after:
         default_browser_return_url: http://localhost:4010/admin/
-    registration:
-      ui_url: http://localhost:4005/auth/registration
-      after:
-        # password:
-        #   hooks:
-        #     - hook: session
         oidc:
           hooks:
-            - hook: session
-        default_browser_return_url: http://localhost:4005/auth/registration
+            - hook: web_hook
+              config:
+                url: http://localhost:3030/customers/login/oidc
+                # url: http://user-service/customers/login/oidc
+                method: POST
+                body: file://kratos-config-map.jsonnet
+                can_interrupt: true
+                auth:
+                  type: api_key
+                  config:
+                    name: x-api-key
+                    value: e9de0c62-8df8-47b9-9f9c-6cf11ae984c0
+                    in: header
 
 serve:
   admin:
@@ -113,7 +113,6 @@ serve:
         - DELETE
       allowed_origins:
         - http://localhost
-        - https://github.com
       enabled: true
       allow_credentials: true
       options_passthrough: true
