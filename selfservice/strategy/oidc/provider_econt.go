@@ -21,6 +21,14 @@ import (
 	"github.com/ory/herodot"
 )
 
+type EcontIdentityResponse struct {
+	Issuer    string `json:"iss,omitempty"`
+	Subject   string `json:"sub,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Username  string `json:"user_name,omitempty"`
+	AccountId int    `json:"account_id,omitempty"`
+}
+
 type ProviderEcont struct {
 	*ProviderGenericOIDC
 }
@@ -156,13 +164,18 @@ func (g *ProviderEcont) Claims(ctx context.Context, exchange *oauth2.Token, quer
 	}
 	defer resp.Body.Close()
 
-	var claims Claims // <-- For additional claims we need to add them in this type! Not sure yet how for nested types.
-	// Here we have decoded all the claims from econt (user data)
-	if err := json.NewDecoder(resp.Body).Decode(&claims); err != nil {
+	data := EcontIdentityResponse{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return nil, errors.WithStack(herodot.ErrInternalServerError.WithReasonf("%s", err))
 	}
-
-	return &claims, nil
+	claims := &Claims{
+		Issuer:    "https://login.econt.com/",
+		Subject:   data.Username,
+		Username:  data.Username,
+		Email:     data.Username,
+		AccountId: data.AccountId,
+	}
+	return claims, nil
 }
 
 func (g *ProviderEcont) endpoint() (*url.URL, error) {
