@@ -22,11 +22,11 @@ import (
 )
 
 type EcontIdentityResponse struct {
-	Issuer    string `json:"iss,omitempty"`
-	Subject   string `json:"sub,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Username  string `json:"user_name,omitempty"`
-	AccountId int    `json:"account_id,omitempty"`
+	Issuer   string `json:"iss,omitempty"`
+	Subject  string `json:"sub,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Username string `json:"user_name,omitempty"`
+	// Users    []map[string]interface{} `json:"users,omitempty"`
 }
 
 type ProviderEcont struct {
@@ -168,13 +168,18 @@ func (g *ProviderEcont) Claims(ctx context.Context, exchange *oauth2.Token, quer
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return nil, errors.WithStack(herodot.ErrInternalServerError.WithReasonf("%s", err))
 	}
+
+	// rawClaims := map[string]interface{}{}
+	// rawClaims["users"] = data
+
 	claims := &Claims{
-		Issuer:    "https://login.econt.com/",
-		Subject:   data.Username,
-		Username:  data.Username,
-		Email:     data.Username,
-		AccountId: data.AccountId,
+		Issuer:   "https://login.econt.com/",
+		Subject:  data.Username,
+		Username: data.Username,
+		Name:     data.Name,
+		Email:    data.Username,
 	}
+	// claims.RawClaims = rawClaims
 	return claims, nil
 }
 
