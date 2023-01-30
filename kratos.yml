@@ -47,7 +47,7 @@ selfservice:
               - read
             requested_claims:
               email: email
-              # users: users
+              name: name
               user_name: user_name
               account_id: account_id
   flows:
