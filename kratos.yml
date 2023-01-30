@@ -49,7 +49,7 @@ selfservice:
               email: email
               name: name
               user_name: user_name
-              account_id: account_id
+              # account_id: account_id
   flows:
     error:
       ui_url: http://localhost:4005/auth/error

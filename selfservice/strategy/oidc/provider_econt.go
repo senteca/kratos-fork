@@ -151,9 +151,11 @@ func (g *ProviderEcont) Claims(ctx context.Context, exchange *oauth2.Token, quer
 
 	req, err := retryablehttp.NewRequest("GET", u.String(), nil)
 
-	q := req.URL.Query()
-	q.Add("access_token", exchange.AccessToken)
-	req.URL.RawQuery = q.Encode()
+	if req != nil {
+		q := req.URL.Query()
+		q.Add("access_token", exchange.AccessToken)
+		req.URL.RawQuery = q.Encode()
+	}
 
 	if err != nil {
 		return nil, errors.WithStack(herodot.ErrInternalServerError.WithReasonf("%s", err))
