@@ -34,6 +34,7 @@ RUN addgroup -S ory; \
 
 COPY --from=base /usr/bin/kratos /usr/bin/kratos
 COPY econt.jsonnet /usr/bin/econt.jsonnet
+COPY econt-bg.jsonnet /usr/bin/econt-bg.jsonnet
 
 # By creating the sqlite folder as the ory user, the mounted volume will be owned by ory:ory, which
 # is required for read/write of SQLite.

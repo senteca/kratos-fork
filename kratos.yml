@@ -33,6 +33,20 @@ selfservice:
       config:
         base_redirect_uri: http://localhost:4433
         providers:
+          - id: econtbg
+            provider: econt
+            client_id: Chzjvt8PCrU9jI # DEMO
+            mapper_url:  file:///Users/petargeorgiev/Documents/Senteca/v3-repos/kratos-fork/econt-bg.jsonnet
+            client_secret: SCsT$a$ZhEdwavWjSWB$p # DEMO
+            issuer_url: https://login-demo.econt-bg.com
+            auth_url: https://login-demo.econt-bg.com/oauth2/auth
+            token_url: https://login-demo.econt-bg.com/oauth2/token
+            scope:
+              - read
+            requested_claims:
+              email: email
+              name: name
+              user_name: user_name
           - id: econt
             provider: econt
             client_id: f93yqURXa # PRODUCTION
@@ -49,7 +63,6 @@ selfservice:
               email: email
               name: name
               user_name: user_name
-              # account_id: account_id
   flows:
     error:
       ui_url: http://localhost:4005/auth/error
@@ -68,7 +81,8 @@ selfservice:
         default_browser_return_url: http://localhost:4005/auth/dashboard
     logout:
       after:
-        default_browser_return_url: https://login.econt.com/oauth2/logout/?client_id=f93yqURXa&redirect_uri=http://localhost:4005/auth/login
+        default_browser_return_url: http://localhost:4005/auth/login
+        # default_browser_return_url: https://login.econt.com/oauth2/logout/?client_id=f93yqURXa&redirect_uri=http://localhost:4005/auth/login
     login:
       lifespan: 10m
       ui_url: http://localhost:4005/auth/login
@@ -82,13 +96,6 @@ selfservice:
                 # url: http://user-service/customers/login/oidc
                 method: POST
                 body: file://kratos-config-map.jsonnet
-                can_interrupt: true
-                auth:
-                  type: api_key
-                  config:
-                    name: x-api-key
-                    value: e9de0c62-8df8-47b9-9f9c-6cf11ae984c0
-                    in: header
 
 serve:
   admin:
