@@ -24,6 +24,7 @@ import (
 type EcontIdentityResponse struct {
 	Issuer   string `json:"iss,omitempty"`
 	Subject  string `json:"sub,omitempty"`
+	Email    string `json:"email,omitempty"`
 	Name     string `json:"name,omitempty"`
 	Username string `json:"user_name,omitempty"`
 	// Users    []map[string]interface{} `json:"users,omitempty"`
@@ -171,15 +172,24 @@ func (g *ProviderEcont) Claims(ctx context.Context, exchange *oauth2.Token, quer
 		return nil, errors.WithStack(herodot.ErrInternalServerError.WithReasonf("%s", err))
 	}
 
+	endpoint, err := g.endpoint()
+
 	// rawClaims := map[string]interface{}{}
 	// rawClaims["users"] = data
 
+	var correctSubject string
+	if data.Email != "" {
+		correctSubject = data.Email
+	} else {
+		correctSubject = data.Username
+	}
+
 	claims := &Claims{
-		Issuer:   "https://login.econt.com/",
-		Subject:  data.Username,
+		Issuer:   endpoint.String(),
+		Subject:  correctSubject,
 		Username: data.Username,
 		Name:     data.Name,
-		Email:    data.Username,
+		Email:    data.Email,
 	}
 	// claims.RawClaims = rawClaims
 	return claims, nil
