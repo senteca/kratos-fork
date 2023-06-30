@@ -11,10 +11,11 @@ import (
 	"github.com/gofrs/uuid"
 
 	"github.com/ory/herodot"
-	hydraclientgo "github.com/ory/hydra-client-go"
-
+	hydraclientgo "github.com/ory/hydra-client-go/v2"
 	"github.com/ory/kratos/hydra"
+	"github.com/ory/kratos/selfservice/sessiontokenexchange"
 	"github.com/ory/kratos/text"
+	"github.com/ory/x/sqlxx"
 	"github.com/ory/x/stringsx"
 
 	"github.com/ory/nosurf"
@@ -27,13 +28,12 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 
-	"github.com/ory/x/urlx"
-
 	"github.com/ory/kratos/driver/config"
 	"github.com/ory/kratos/selfservice/errorx"
 	"github.com/ory/kratos/selfservice/flow"
 	"github.com/ory/kratos/session"
 	"github.com/ory/kratos/x"
+	"github.com/ory/x/urlx"
 )
 
 const (
@@ -50,7 +50,7 @@ type (
 		HookExecutorProvider
 		FlowPersistenceProvider
 		errorx.ManagementProvider
-		hydra.HydraProvider
+		hydra.Provider
 		StrategyProvider
 		session.HandlerProvider
 		session.ManagementProvider
@@ -59,6 +59,7 @@ type (
 		x.CSRFProvider
 		config.Provider
 		ErrorHandlerProvider
+		sessiontokenexchange.PersistenceProvider
 	}
 	HandlerProvider interface {
 		LoginHandler() *Handler
@@ -102,6 +103,14 @@ func WithFlowReturnTo(returnTo string) FlowOption {
 	}
 }
 
+func WithFormErrorMessage(messages []text.Message) FlowOption {
+	return func(f *Flow) {
+		for i := range messages {
+			f.UI.Messages.Add(&messages[i])
+		}
+	}
+}
+
 func (h *Handler) NewLoginFlow(w http.ResponseWriter, r *http.Request, ft flow.Type, opts ...FlowOption) (*Flow, *session.Session, error) {
 	conf := h.d.Config()
 	f, err := NewFlow(conf, conf.SelfServiceFlowLoginRequestLifespan(r.Context()), h.d.GenerateCSRFToken(r), r, ft)
@@ -129,6 +138,13 @@ func (h *Handler) NewLoginFlow(w http.ResponseWriter, r *http.Request, ft flow.T
 	sess, err := h.d.SessionManager().FetchFromRequest(r.Context(), r)
 	if e := new(session.ErrNoActiveSessionFound); errors.As(err, &e) {
 		// No session exists yet
+		if ft == flow.TypeAPI && r.URL.Query().Get("return_session_token_exchange_code") == "true" {
+			e, err := h.d.SessionTokenExchangePersister().CreateSessionTokenExchanger(r.Context(), f.ID)
+			if err != nil {
+				return nil, nil, errors.WithStack(herodot.ErrInternalServerError.WithWrap(err))
+			}
+			f.SessionTokenExchangeCode = e.InitCode
+		}
 
 		// We can not request an AAL > 1 because we must first verify the first factor.
 		if f.RequestedAAL > identity.AuthenticatorAssuranceLevel1 {
@@ -214,8 +230,10 @@ func (h *Handler) FromOldFlow(w http.ResponseWriter, r *http.Request, of Flow) (
 
 // Create Native Login Flow Parameters
 //
-// nolint:deadcode,unused
 // swagger:parameters createNativeLoginFlow
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type createNativeLoginFlow struct {
 	// Refresh a login session
 	//
@@ -240,6 +258,17 @@ type createNativeLoginFlow struct {
 	//
 	// in: header
 	SessionToken string `json:"X-Session-Token"`
+
+	// EnableSessionTokenExchangeCode requests the login flow to include a code that can be used to retrieve the session token
+	// after the login flow has been completed.
+	//
+	// in: query
+	EnableSessionTokenExchangeCode bool `json:"return_session_token_exchange_code"`
+
+	// The URL to return the browser to after the flow was completed.
+	//
+	// in: query
+	ReturnTo string `json:"return_to"`
 }
 
 // swagger:route GET /self-service/login/api frontend createNativeLoginFlow
@@ -288,8 +317,10 @@ func (h *Handler) createNativeLoginFlow(w http.ResponseWriter, r *http.Request, 
 
 // Initialize Browser Login Flow Parameters
 //
-// nolint:deadcode,unused
 // swagger:parameters createBrowserLoginFlow
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type createBrowserLoginFlow struct {
 	// Refresh a login session
 	//
@@ -373,40 +404,54 @@ type createBrowserLoginFlow struct {
 //	  303: emptyResponse
 //	  400: errorGeneric
 //	  default: errorGeneric
-func (h *Handler) createBrowserLoginFlow(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	var hlr *hydraclientgo.OAuth2LoginRequest
-	var hlc uuid.NullUUID
+func (h *Handler) createBrowserLoginFlow(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var (
+		hydraLoginRequest   *hydraclientgo.OAuth2LoginRequest
+		hydraLoginChallenge sqlxx.NullString
+	)
 	if r.URL.Query().Has("login_challenge") {
 		var err error
-		hlc, err = hydra.GetLoginChallengeID(h.d.Config(), r)
+		hydraLoginChallenge, err = hydra.GetLoginChallengeID(h.d.Config(), r)
 		if err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 			return
 		}
 
-		hlr, err = h.d.Hydra().GetLoginRequest(r.Context(), hlc)
+		hydraLoginRequest, err = h.d.Hydra().GetLoginRequest(r.Context(), string(hydraLoginChallenge))
 		if err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, errors.WithStack(herodot.ErrInternalServerError.WithReason("Failed to retrieve OAuth 2.0 login request.")))
 			return
 		}
 
-		if !hlr.GetSkip() {
+		if !hydraLoginRequest.GetSkip() {
 			q := r.URL.Query()
 			q.Set("refresh", "true")
+			r.URL.RawQuery = q.Encode()
+		}
+
+		// on OAuth2 flows, we need to use the RequestURL
+		// as the ReturnTo URL.
+		// This is because a user might want to switch between
+		// different flows, such as login to registration and login to recovery.
+		// After completing a complex flow, such as recovery, we want the user
+		// to be redirected back to the original OAuth2 login flow.
+		if hydraLoginRequest.RequestUrl != "" && h.d.Config().OAuth2ProviderOverrideReturnTo(r.Context()) {
+			// replace the return_to query parameter
+			q := r.URL.Query()
+			q.Set("return_to", hydraLoginRequest.RequestUrl)
 			r.URL.RawQuery = q.Encode()
 		}
 	}
 
 	a, sess, err := h.NewLoginFlow(w, r, flow.TypeBrowser)
 	if errors.Is(err, ErrAlreadyLoggedIn) {
-		if hlr != nil {
-			if !hlr.GetSkip() {
+		if hydraLoginRequest != nil {
+			if !hydraLoginRequest.GetSkip() {
 				h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, errors.WithStack(herodot.ErrInternalServerError.WithReason("ErrAlreadyLoggedIn indicated we can skip login, but Hydra asked us to refresh")))
 				return
 			}
 
-			rt, err := h.d.Hydra().AcceptLoginRequest(r.Context(), hlc.UUID, sess.IdentityID.String(), sess.AMR)
-
+			rt, err := h.d.Hydra().AcceptLoginRequest(r.Context(), string(hydraLoginChallenge), sess.IdentityID.String(), sess.AMR)
 			if err != nil {
 				h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 				return
@@ -436,13 +481,17 @@ func (h *Handler) createBrowserLoginFlow(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	a.HydraLoginRequest = hydraLoginRequest
+
 	x.AcceptToRedirectOrJSON(w, r, h.d.Writer(), a, a.AppendTo(h.d.Config().SelfServiceFlowLoginUI(r.Context())).String())
 }
 
 // Get Login Flow Parameters
 //
-// nolint:deadcode,unused
 // swagger:parameters getLoginFlow
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type getLoginFlow struct {
 	// The Login Flow ID
 	//
@@ -533,8 +582,8 @@ func (h *Handler) getLoginFlow(w http.ResponseWriter, r *http.Request, _ httprou
 		return
 	}
 
-	if ar.OAuth2LoginChallenge.Valid {
-		hlr, err := h.d.Hydra().GetLoginRequest(r.Context(), ar.OAuth2LoginChallenge)
+	if ar.OAuth2LoginChallenge != "" {
+		hlr, err := h.d.Hydra().GetLoginRequest(r.Context(), string(ar.OAuth2LoginChallenge))
 		if err != nil {
 			// We don't redirect back to the third party on errors because Hydra doesn't
 			// give us the 3rd party return_uri when it redirects to the login UI.
@@ -549,8 +598,10 @@ func (h *Handler) getLoginFlow(w http.ResponseWriter, r *http.Request, _ httprou
 
 // Update Login Flow Parameters
 //
-// nolint:deadcode,unused
 // swagger:parameters updateLoginFlow
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type updateLoginFlow struct {
 	// The Login Flow ID
 	//
@@ -581,7 +632,9 @@ type updateLoginFlow struct {
 }
 
 // swagger:model updateLoginFlowBody
-// nolint:deadcode,unused
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type updateLoginFlowBody struct{}
 
 // swagger:route POST /self-service/login frontend updateLoginFlow
@@ -697,7 +750,7 @@ continueLogin:
 	var i *identity.Identity
 	var group node.UiNodeGroup
 	for _, ss := range h.d.AllLoginStrategies() {
-		interim, err := ss.Login(w, r, f, sess)
+		interim, err := ss.Login(w, r, f, sess.IdentityID)
 		group = ss.NodeGroup()
 		if errors.Is(err, flow.ErrStrategyNotResponsible) {
 			continue
@@ -725,7 +778,7 @@ continueLogin:
 		return
 	}
 
-	if err := h.d.LoginHookExecutor().PostLoginHook(w, r, group, f, i, sess); err != nil {
+	if err := h.d.LoginHookExecutor().PostLoginHook(w, r, group, f, i, sess, ""); err != nil {
 		if errors.Is(err, ErrAddressNotVerified) {
 			h.d.LoginFlowErrorHandler().WriteFlowError(w, r, f, node.DefaultGroup, errors.WithStack(schema.NewAddressNotVerifiedError()))
 			return

@@ -8,9 +8,10 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/ory/herodot"
 	"github.com/ory/kratos/hydra"
+	"github.com/ory/kratos/selfservice/sessiontokenexchange"
 	"github.com/ory/kratos/text"
-
 	"github.com/ory/nosurf"
 
 	"github.com/ory/kratos/schema"
@@ -44,7 +45,7 @@ type (
 	handlerDependencies interface {
 		config.Provider
 		errorx.ManagementProvider
-		hydra.HydraProvider
+		hydra.Provider
 		session.HandlerProvider
 		session.ManagementProvider
 		x.WriterProvider
@@ -54,6 +55,7 @@ type (
 		HookExecutorProvider
 		FlowPersistenceProvider
 		ErrorHandlerProvider
+		sessiontokenexchange.PersistenceProvider
 	}
 	HandlerProvider interface {
 		RegistrationHandler() *Handler
@@ -117,6 +119,14 @@ func (h *Handler) NewRegistrationFlow(w http.ResponseWriter, r *http.Request, ft
 	}
 	for _, o := range opts {
 		o(f)
+	}
+
+	if ft == flow.TypeAPI && r.URL.Query().Get("return_session_token_exchange_code") == "true" {
+		e, err := h.d.SessionTokenExchangePersister().CreateSessionTokenExchanger(r.Context(), f.ID)
+		if err != nil {
+			return nil, errors.WithStack(herodot.ErrInternalServerError.WithWrap(err))
+		}
+		f.SessionTokenExchangeCode = e.InitCode
 	}
 
 	for _, s := range h.d.RegistrationStrategies(r.Context()) {
@@ -195,10 +205,31 @@ func (h *Handler) createNativeRegistrationFlow(w http.ResponseWriter, r *http.Re
 	h.d.Writer().Write(w, r, a)
 }
 
+// Create Native Registration Flow Parameters
+//
+// swagger:parameters createNativeRegistrationFlow
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
+type createNativeRegistrationFlow struct {
+	// EnableSessionTokenExchangeCode requests the login flow to include a code that can be used to retrieve the session token
+	// after the login flow has been completed.
+	//
+	// in: query
+	EnableSessionTokenExchangeCode bool `json:"return_session_token_exchange_code"`
+
+	// The URL to return the browser to after the flow was completed.
+	//
+	// in: query
+	ReturnTo string `json:"return_to"`
+}
+
 // Create Browser Registration Flow Parameters
 //
-// nolint:deadcode,unused
 // swagger:parameters createBrowserRegistrationFlow
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type createBrowserRegistrationFlow struct {
 	// The URL to return the browser to after the flow was completed.
 	//
@@ -217,6 +248,16 @@ type createBrowserRegistrationFlow struct {
 	// required: false
 	// in: query
 	LoginChallenge string `json:"login_challenge"`
+
+	// The URL to return the browser to after the verification flow was completed.
+	//
+	// After the registration flow is completed, the user will be sent a verification email.
+	// Upon completing the verification flow, this URL will be used to override the default
+	// `selfservice.flows.verification.after.default_redirect_to` value.
+	//
+	// required: false
+	// in: query
+	AfterVerificationReturnTo string `json:"after_verification_return_to"`
 }
 
 // swagger:route GET /self-service/registration/browser frontend createBrowserRegistrationFlow
@@ -309,8 +350,10 @@ func (h *Handler) createBrowserRegistrationFlow(w http.ResponseWriter, r *http.R
 
 // Get Registration Flow Parameters
 //
-// nolint:deadcode,unused
 // swagger:parameters getRegistrationFlow
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type getRegistrationFlow struct {
 	// The Registration Flow ID
 	//
@@ -406,8 +449,8 @@ func (h *Handler) getRegistrationFlow(w http.ResponseWriter, r *http.Request, ps
 		return
 	}
 
-	if ar.OAuth2LoginChallenge.Valid {
-		hlr, err := h.d.Hydra().GetLoginRequest(r.Context(), ar.OAuth2LoginChallenge)
+	if ar.OAuth2LoginChallenge != "" {
+		hlr, err := h.d.Hydra().GetLoginRequest(r.Context(), string(ar.OAuth2LoginChallenge))
 		if err != nil {
 			// We don't redirect back to the third party on errors because Hydra doesn't
 			// give us the 3rd party return_uri when it redirects to the login UI.
@@ -423,7 +466,9 @@ func (h *Handler) getRegistrationFlow(w http.ResponseWriter, r *http.Request, ps
 // Update Registration Flow Parameters
 //
 // swagger:parameters updateRegistrationFlow
-// nolint:deadcode,unused
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type updateRegistrationFlow struct {
 	// The Registration Flow ID
 	//
@@ -451,7 +496,9 @@ type updateRegistrationFlow struct {
 // Update Registration Request Body
 //
 // swagger:model updateRegistrationFlowBody
-// nolint:deadcode,unused
+//
+//nolint:deadcode,unused
+//lint:ignore U1000 Used to generate Swagger and OpenAPI definitions
 type updateRegistrationFlowBody struct{}
 
 // swagger:route POST /self-service/registration frontend updateRegistrationFlow
@@ -552,7 +599,7 @@ func (h *Handler) updateRegistrationFlow(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	if err := h.d.RegistrationExecutor().PostRegistrationHook(w, r, s.ID(), f, i); err != nil {
+	if err := h.d.RegistrationExecutor().PostRegistrationHook(w, r, s.ID(), "", f, i); err != nil {
 		h.d.RegistrationFlowErrorHandler().WriteFlowError(w, r, f, s.NodeGroup(), err)
 		return
 	}

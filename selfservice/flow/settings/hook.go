@@ -9,6 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/ory/kratos/x/events"
+
 	"github.com/ory/kratos/session"
 
 	"github.com/ory/kratos/text"
@@ -278,11 +282,16 @@ func (e *HookExecutor) PostSettingsHook(w http.ResponseWriter, r *http.Request, 
 		WithField("flow_method", settingsType).
 		Debug("Completed all PostSettingsPrePersistHooks and PostSettingsPostPersistHooks.")
 
+	trace.SpanFromContext(r.Context()).AddEvent(events.NewSettingsSucceeded(r.Context(), i.ID, string(ctxUpdate.Flow.Type), ctxUpdate.Flow.Active.String()))
+
 	if ctxUpdate.Flow.Type == flow.TypeAPI {
 		updatedFlow, err := e.d.SettingsFlowPersister().GetSettingsFlow(r.Context(), ctxUpdate.Flow.ID)
 		if err != nil {
 			return err
 		}
+		// ContinueWith items are transient items, not stored in the database, and need to be carried over here, so
+		// they can be returned to the client.
+		updatedFlow.ContinueWithItems = ctxUpdate.Flow.ContinueWithItems
 
 		e.d.Writer().Write(w, r, updatedFlow)
 		return nil
@@ -297,6 +306,9 @@ func (e *HookExecutor) PostSettingsHook(w http.ResponseWriter, r *http.Request, 
 		if err != nil {
 			return err
 		}
+		// ContinueWith items are transient items, not stored in the database, and need to be carried over here, so
+		// they can be returned to the client.
+		updatedFlow.ContinueWithItems = ctxUpdate.Flow.ContinueWithItems
 
 		e.d.Writer().Write(w, r, updatedFlow)
 		return nil

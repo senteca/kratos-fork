@@ -10,13 +10,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/bxcodec/faker/v3"
-
 	"github.com/tidwall/gjson"
 
 	"github.com/ory/kratos/identity"
@@ -48,19 +48,6 @@ func send(code int) httprouter.Handle {
 	return func(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 		w.WriteHeader(code)
 	}
-}
-
-func getSessionCookie(t *testing.T, r *http.Response) *http.Cookie {
-	var sessionCookie *http.Cookie
-	var found bool
-	for _, c := range r.Cookies() {
-		if c.Name == config.DefaultSessionCookieName {
-			found = true
-			sessionCookie = c
-		}
-	}
-	require.True(t, found)
-	return sessionCookie
 }
 
 func assertNoCSRFCookieInResponse(t *testing.T, _ *httptest.Server, _ *http.Client, r *http.Response) {
@@ -560,31 +547,37 @@ func TestHandlerAdminSessionManagement(t *testing.T) {
 				expectedDevicesCount string
 			}{
 				{
+					description:          "expand nothing",
+					expand:               "",
+					expectedIdentityId:   "",
+					expectedDevicesCount: "",
+				},
+				{
 					description:          "expand Identity",
-					expand:               "?expand=Identity",
+					expand:               "expand=identity&",
 					expectedIdentityId:   s.Identity.ID.String(),
 					expectedDevicesCount: "",
 				},
 				{
 					description:          "expand Devices",
-					expand:               "?expand=Devices",
+					expand:               "expand=devices&",
 					expectedIdentityId:   "",
 					expectedDevicesCount: "1",
 				},
 				{
 					description:          "expand Identity and Devices",
-					expand:               "?expand=Identity&expand=Devices",
+					expand:               "expand=identity&expand=devices&",
 					expectedIdentityId:   s.Identity.ID.String(),
 					expectedDevicesCount: "1",
 				},
 			} {
 				t.Run(fmt.Sprintf("description=%s", tc.description), func(t *testing.T) {
-					req, _ := http.NewRequest("GET", ts.URL+"/admin/sessions/"+tc.expand, nil)
+					req, _ := http.NewRequest("GET", ts.URL+"/admin/sessions?"+tc.expand, nil)
 					res, err := client.Do(req)
 					require.NoError(t, err)
 					assert.Equal(t, http.StatusOK, res.StatusCode)
 					assert.Equal(t, "1", res.Header.Get("X-Total-Count"))
-					assert.Equal(t, "</admin/sessions"+tc.expand+"&page_size=250&page_token=00000000-0000-0000-0000-000000000000>; rel=\"first\"", res.Header.Get("Link"))
+					assert.Equal(t, "</admin/sessions?"+tc.expand+"page_size=250&page_token=00000000-0000-0000-0000-000000000000>; rel=\"first\"", res.Header.Get("Link"))
 
 					body := ioutilx.MustReadAll(res.Body)
 					assert.Equal(t, s.ID.String(), gjson.GetBytes(body, "0.id").String())
@@ -756,6 +749,7 @@ func TestHandlerAdminSessionManagement(t *testing.T) {
 			t.Run(fmt.Sprintf("active=%#v", tc.activeOnly), func(t *testing.T) {
 				sessions, _, _ := reg.SessionPersister().ListSessionsByIdentity(ctx, i.ID, nil, 1, 10, uuid.Nil, ExpandEverything)
 				require.Equal(t, 5, len(sessions))
+				assert.True(t, sort.IsSorted(sort.Reverse(byAuthenticatedAt(sessions))))
 
 				reqURL := ts.URL + "/admin/identities/" + i.ID.String() + "/sessions"
 				if tc.activeOnly != "" {
@@ -1028,4 +1022,12 @@ func TestHandlerRefreshSessionBySessionID(t *testing.T) {
 		body := ioutilx.MustReadAll(res.Body)
 		assert.NotEqual(t, gjson.GetBytes(body, "error.id").String(), "security_csrf_violation")
 	})
+}
+
+type byAuthenticatedAt []Session
+
+func (s byAuthenticatedAt) Len() int      { return len(s) }
+func (s byAuthenticatedAt) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s byAuthenticatedAt) Less(i, j int) bool {
+	return s[i].AuthenticatedAt.Before(s[j].AuthenticatedAt)
 }

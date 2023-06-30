@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ory/kratos/x"
+
 	"github.com/ory/x/httpx"
 	"github.com/ory/x/pagination/keysetpagination"
 	"github.com/ory/x/stringsx"
@@ -22,7 +24,6 @@ import (
 
 	"github.com/ory/herodot"
 	"github.com/ory/kratos/identity"
-	"github.com/ory/kratos/x"
 	"github.com/ory/x/randx"
 )
 
@@ -157,6 +158,19 @@ func (s *Session) CompletedLoginFor(method identity.CredentialsType, aal identit
 	s.AMR = append(s.AMR, AuthenticationMethod{Method: method, AAL: aal, CompletedAt: time.Now().UTC()})
 }
 
+func (s *Session) CompletedLoginForWithProvider(method identity.CredentialsType, aal identity.AuthenticatorAssuranceLevel, providerID string) {
+	s.AMR = append(s.AMR, AuthenticationMethod{Method: method, AAL: aal, Provider: providerID, CompletedAt: time.Now().UTC()})
+}
+
+func (s *Session) AuthenticatedVia(method identity.CredentialsType) bool {
+	for _, authMethod := range s.AMR {
+		if authMethod.Method == method {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Session) SetAuthenticatorAssuranceLevel() {
 	if len(s.AMR) == 0 {
 		// No AMR is set
@@ -214,9 +228,9 @@ func NewActiveSession(r *http.Request, i *identity.Identity, c lifespanProvider,
 
 func NewInactiveSession() *Session {
 	return &Session{
-		ID:                          x.NewUUID(),
-		Token:                       randx.MustString(32, randx.AlphaNum),
-		LogoutToken:                 randx.MustString(32, randx.AlphaNum),
+		ID:                          uuid.Nil,
+		Token:                       x.OrySessionToken + randx.MustString(32, randx.AlphaNum),
+		LogoutToken:                 x.OryLogoutToken + randx.MustString(32, randx.AlphaNum),
 		Active:                      false,
 		AuthenticatorAssuranceLevel: identity.NoAuthenticatorAssuranceLevel,
 	}
@@ -234,23 +248,21 @@ func (s *Session) Activate(r *http.Request, i *identity.Identity, c lifespanProv
 	s.Identity = i
 	s.IdentityID = i.ID
 
-	s.SaveSessionDeviceInformation(r)
+	s.SetSessionDeviceInformation(r)
 	s.SetAuthenticatorAssuranceLevel()
 	return nil
 }
 
-func (s *Session) SaveSessionDeviceInformation(r *http.Request) {
-	var device Device
-
-	device.ID = x.NewUUID()
-	device.SessionID = s.ID
+func (s *Session) SetSessionDeviceInformation(r *http.Request) {
+	device := Device{
+		SessionID: s.ID,
+		IPAddress: stringsx.GetPointer(httpx.ClientIP(r)),
+	}
 
 	agent := r.Header["User-Agent"]
 	if len(agent) > 0 {
 		device.UserAgent = stringsx.GetPointer(strings.Join(agent, " "))
 	}
-
-	device.IPAddress = stringsx.GetPointer(httpx.ClientIP(r))
 
 	var clientGeoLocation []string
 	if r.Header.Get("Cf-Ipcity") != "" {
@@ -264,9 +276,9 @@ func (s *Session) SaveSessionDeviceInformation(r *http.Request) {
 	s.Devices = append(s.Devices, device)
 }
 
-func (s *Session) Declassify() *Session {
+func (s Session) Declassified() *Session {
 	s.Identity = s.Identity.CopyWithoutCredentials()
-	return s
+	return &s
 }
 
 func (s *Session) IsActive() bool {
@@ -276,6 +288,13 @@ func (s *Session) IsActive() bool {
 func (s *Session) Refresh(ctx context.Context, c lifespanProvider) *Session {
 	s.ExpiresAt = time.Now().Add(c.SessionLifespan(ctx)).UTC()
 	return s
+}
+
+func (s *Session) MarshalJSON() ([]byte, error) {
+	type ss Session
+	out := ss(*s)
+	out.Active = s.IsActive()
+	return json.Marshal(out)
 }
 
 func (s *Session) CanBeRefreshed(ctx context.Context, c refreshWindowProvider) bool {
@@ -303,6 +322,9 @@ type AuthenticationMethod struct {
 
 	// When the authentication challenge was completed.
 	CompletedAt time.Time `json:"completed_at"`
+
+	// OIDC or SAML provider id used for authentication
+	Provider string `json:"provider,omitempty"`
 }
 
 // Scan implements the Scanner interface.

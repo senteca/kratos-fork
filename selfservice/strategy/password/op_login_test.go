@@ -27,7 +27,7 @@ import (
 	"github.com/ory/x/resilience"
 	"github.com/ory/x/urlx"
 
-	hydraclientgo "github.com/ory/hydra-client-go"
+	hydraclientgo "github.com/ory/hydra-client-go/v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -91,7 +91,7 @@ func newHydra(t *testing.T, loginUI string, consentUI string) (hydraAdmin string
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	hydra, err := pool.RunWithOptions(&dockertest.RunOptions{
+	hydraResource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "oryd/hydra",
 		Tag:        "v2.0.0",
 		Env: []string{
@@ -110,18 +110,25 @@ func newHydra(t *testing.T, loginUI string, consentUI string) (hydraAdmin string
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, hydra.Close())
+		require.NoError(t, hydraResource.Close())
 	})
 
-	require.NoError(t, hydra.Expire(uint(60*5)))
+	require.NoError(t, hydraResource.Expire(uint(60*5)))
 
-	require.NotEmpty(t, hydra.GetPort("4444/tcp"), "%+v", hydra.Container.NetworkSettings.Ports)
-	require.NotEmpty(t, hydra.GetPort("4445/tcp"), "%+v", hydra.Container)
+	require.NotEmpty(t, hydraResource.GetPort("4444/tcp"), "%+v", hydraResource.Container.NetworkSettings.Ports)
+	require.NotEmpty(t, hydraResource.GetPort("4445/tcp"), "%+v", hydraResource.Container)
 
-	hydraPublic = "http://127.0.0.1:" + hydra.GetPort("4444/tcp")
-	hydraAdmin = "http://127.0.0.1:" + hydra.GetPort("4445/tcp")
+	hydraPublic = "http://127.0.0.1:" + hydraResource.GetPort("4444/tcp")
+	hydraAdmin = "http://127.0.0.1:" + hydraResource.GetPort("4445/tcp")
 
-	go pool.Client.Logs(docker.LogsOptions{ErrorStream: TestLogWriter{T: t, streamName: "hydra-stderr"}, OutputStream: TestLogWriter{T: t, streamName: "hydra-stdout"}, Stdout: true, Stderr: true, Follow: true, Container: hydra.Container.ID})
+	go pool.Client.Logs(docker.LogsOptions{
+		ErrorStream:  TestLogWriter{T: t, streamName: "hydra-stderr"},
+		OutputStream: TestLogWriter{T: t, streamName: "hydra-stdout"},
+		Stdout:       true,
+		Stderr:       true,
+		Follow:       true,
+		Container:    hydraResource.Container.ID,
+	})
 	hl := logrusx.New("hydra-ready-check", "hydra-ready-check")
 	err = resilience.Retry(hl, time.Second*1, time.Second*5, func() error {
 		pr := hydraPublic + "/health/ready"
@@ -163,6 +170,7 @@ func TestOAuth2Provider(t *testing.T) {
 		config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypePassword),
 		map[string]interface{}{"enabled": true},
 	)
+
 	router := x.NewRouterPublic()
 	kratosPublicTS, _ := testhelpers.NewKratosServerWithRouters(t, reg, router, x.NewRouterAdmin())
 
@@ -176,7 +184,7 @@ func TestOAuth2Provider(t *testing.T) {
 	var hydraAdminClient hydraclientgo.OAuth2Api
 	var clientAppOAuth2Config *oauth2.Config
 
-	clientAppTS := testhelpers.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	clientAppTS := testhelpers.NewHTTPTestServer(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		t.Logf("[clientAppTS] handling a callback at client app %s", r.URL.String())
 		if r.URL.Query().Has("code") {
 			token, err := clientAppOAuth2Config.Exchange(r.Context(), r.URL.Query().Get("code"))
@@ -194,7 +202,7 @@ func TestOAuth2Provider(t *testing.T) {
 
 	testRequireLogin := true
 
-	uiTS := testhelpers.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	uiTS := testhelpers.NewHTTPTestServer(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		t.Logf("[uiTS] handling %s", r.URL)
 		q := r.URL.Query()
 
@@ -238,6 +246,7 @@ func TestOAuth2Provider(t *testing.T) {
 
 	hydraAdmin, hydraPublic := newHydra(t, uiTS.URL, uiTS.URL)
 	conf.MustSet(ctx, config.ViperKeyOAuth2ProviderURL, hydraAdmin)
+
 	hydraAdminClient = createHydraOAuth2ApiClient(hydraAdmin)
 	clientID := createOAuth2Client(t, ctx, hydraAdminClient, []string{clientAppTS.URL}, "profile email")
 
@@ -331,11 +340,11 @@ type AcceptWrongSubject struct {
 	h *hydra.DefaultHydra
 }
 
-func (h *AcceptWrongSubject) AcceptLoginRequest(ctx context.Context, hlc uuid.UUID, sub string, amr session.AuthenticationMethods) (string, error) {
+func (h *AcceptWrongSubject) AcceptLoginRequest(ctx context.Context, loginChallenge string, subject string, amr session.AuthenticationMethods) (string, error) {
 	hackerman := uuid.Must(uuid.NewV4())
-	return h.h.AcceptLoginRequest(ctx, hlc, hackerman.String(), amr)
+	return h.h.AcceptLoginRequest(ctx, loginChallenge, hackerman.String(), amr)
 }
 
-func (h *AcceptWrongSubject) GetLoginRequest(ctx context.Context, hlc uuid.NullUUID) (*hydraclientgo.OAuth2LoginRequest, error) {
-	return h.h.GetLoginRequest(ctx, hlc)
+func (h *AcceptWrongSubject) GetLoginRequest(ctx context.Context, loginChallenge string) (*hydraclientgo.OAuth2LoginRequest, error) {
+	return h.h.GetLoginRequest(ctx, loginChallenge)
 }

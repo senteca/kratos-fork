@@ -1,10 +1,10 @@
 // Copyright © 2023 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-import { gen, website } from "../../../helpers"
 import { authenticator } from "otplib"
-import { routes as react } from "../../../helpers/react"
+import { gen, website } from "../../../helpers"
 import { routes as express } from "../../../helpers/express"
+import { routes as react } from "../../../helpers/react"
 
 context("2FA TOTP", () => {
   ;[
@@ -49,7 +49,7 @@ context("2FA TOTP", () => {
         cy.visit(settings)
         cy.requireStrictAal()
 
-        let secret
+        let secret: string
         cy.get('[data-testid="node/text/totp_secret_key/text"]').then(($e) => {
           secret = $e.text().trim()
         })
@@ -85,7 +85,7 @@ context("2FA TOTP", () => {
         })
         cy.get('*[name="method"][value="totp"]').click()
         cy.location("pathname").should((loc) => {
-          expect(loc).to.oneOf(["/welcome", "/", "/sessions"])
+          expect(loc).to.oneOf(["/welcome", "/", "/sessions", "/settings"])
         })
         cy.getSession({
           expectAal: "aal2",
@@ -101,7 +101,7 @@ context("2FA TOTP", () => {
         cy.visit(settings)
         cy.requireStrictAal()
 
-        let secret
+        let secret: string
         cy.get('[data-testid="node/text/totp_secret_key/text"]').then(($e) => {
           secret = $e.text().trim()
         })
@@ -147,7 +147,7 @@ context("2FA TOTP", () => {
         cy.get('img[data-testid="node/image/totp_qr"]').should("exist")
 
         // Set up TOTP
-        let secret
+        let secret: string
         cy.get('[data-testid="node/text/totp_secret_key/text"]').then(($e) => {
           secret = $e.text().trim()
         })
@@ -206,7 +206,7 @@ context("2FA TOTP", () => {
 
         // Linking a new device works
         cy.visit(settings)
-        let newSecret
+        let newSecret: string
         cy.get('[data-testid="node/text/totp_secret_key/text"]').then(($e) => {
           newSecret = $e.text().trim()
         })
@@ -292,7 +292,7 @@ context("2FA TOTP", () => {
 
       // The React app keeps using the same flow. The following scenario used to be broken,
       // because the internal context wasn't populated properly in the flow after settings were saved.
-      it.only("should allow changing other settings and then setting up totp", () => {
+      it("should allow changing other settings and then setting up totp", () => {
         cy.visit(settings)
         cy.get('input[name="traits.website"]')
           .clear()
@@ -300,7 +300,7 @@ context("2FA TOTP", () => {
         cy.get('*[name="method"][value="profile"]').click()
         cy.expectSettingsSaved()
 
-        let secret
+        let secret: string
         cy.get('[data-testid="node/text/totp_secret_key/text"]').then(($e) => {
           secret = $e.text().trim()
         })

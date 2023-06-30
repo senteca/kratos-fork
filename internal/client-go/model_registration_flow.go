@@ -24,13 +24,18 @@ type RegistrationFlow struct {
 	// ID represents the flow's unique ID. When performing the registration flow, this represents the id in the registration ui's query parameter: http://<selfservice.flows.registration.ui_url>/?flow=<id>
 	Id string `json:"id"`
 	// IssuedAt is the time (UTC) when the flow occurred.
-	IssuedAt             time.Time           `json:"issued_at"`
-	Oauth2LoginChallenge NullableString      `json:"oauth2_login_challenge,omitempty"`
+	IssuedAt time.Time `json:"issued_at"`
+	// Ory OAuth 2.0 Login Challenge.  This value is set using the `login_challenge` query parameter of the registration and login endpoints. If set will cooperate with Ory OAuth2 and OpenID to act as an OAuth2 server / OpenID Provider.
+	Oauth2LoginChallenge *string             `json:"oauth2_login_challenge,omitempty"`
 	Oauth2LoginRequest   *OAuth2LoginRequest `json:"oauth2_login_request,omitempty"`
 	// RequestURL is the initial URL that was requested from Ory Kratos. It can be used to forward information contained in the URL's path or query for example.
 	RequestUrl string `json:"request_url"`
 	// ReturnTo contains the requested return_to URL.
 	ReturnTo *string `json:"return_to,omitempty"`
+	// SessionTokenExchangeCode holds the secret code that the client can use to retrieve a session token after the flow has been completed. This is only set if the client has requested a session token exchange code, and if the flow is of type \"api\", and only on creating the flow.
+	SessionTokenExchangeCode *string `json:"session_token_exchange_code,omitempty"`
+	// TransientPayload is used to pass data from the registration to a webhook
+	TransientPayload map[string]interface{} `json:"transient_payload,omitempty"`
 	// The flow type can either be `api` or `browser`.
 	Type string      `json:"type"`
 	Ui   UiContainer `json:"ui"`
@@ -163,47 +168,36 @@ func (o *RegistrationFlow) SetIssuedAt(v time.Time) {
 	o.IssuedAt = v
 }
 
-// GetOauth2LoginChallenge returns the Oauth2LoginChallenge field value if set, zero value otherwise (both if not set or set to explicit null).
+// GetOauth2LoginChallenge returns the Oauth2LoginChallenge field value if set, zero value otherwise.
 func (o *RegistrationFlow) GetOauth2LoginChallenge() string {
-	if o == nil || o.Oauth2LoginChallenge.Get() == nil {
+	if o == nil || o.Oauth2LoginChallenge == nil {
 		var ret string
 		return ret
 	}
-	return *o.Oauth2LoginChallenge.Get()
+	return *o.Oauth2LoginChallenge
 }
 
 // GetOauth2LoginChallengeOk returns a tuple with the Oauth2LoginChallenge field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-// NOTE: If the value is an explicit nil, `nil, true` will be returned
 func (o *RegistrationFlow) GetOauth2LoginChallengeOk() (*string, bool) {
-	if o == nil {
+	if o == nil || o.Oauth2LoginChallenge == nil {
 		return nil, false
 	}
-	return o.Oauth2LoginChallenge.Get(), o.Oauth2LoginChallenge.IsSet()
+	return o.Oauth2LoginChallenge, true
 }
 
 // HasOauth2LoginChallenge returns a boolean if a field has been set.
 func (o *RegistrationFlow) HasOauth2LoginChallenge() bool {
-	if o != nil && o.Oauth2LoginChallenge.IsSet() {
+	if o != nil && o.Oauth2LoginChallenge != nil {
 		return true
 	}
 
 	return false
 }
 
-// SetOauth2LoginChallenge gets a reference to the given NullableString and assigns it to the Oauth2LoginChallenge field.
+// SetOauth2LoginChallenge gets a reference to the given string and assigns it to the Oauth2LoginChallenge field.
 func (o *RegistrationFlow) SetOauth2LoginChallenge(v string) {
-	o.Oauth2LoginChallenge.Set(&v)
-}
-
-// SetOauth2LoginChallengeNil sets the value for Oauth2LoginChallenge to be an explicit nil
-func (o *RegistrationFlow) SetOauth2LoginChallengeNil() {
-	o.Oauth2LoginChallenge.Set(nil)
-}
-
-// UnsetOauth2LoginChallenge ensures that no value is present for Oauth2LoginChallenge, not even an explicit nil
-func (o *RegistrationFlow) UnsetOauth2LoginChallenge() {
-	o.Oauth2LoginChallenge.Unset()
+	o.Oauth2LoginChallenge = &v
 }
 
 // GetOauth2LoginRequest returns the Oauth2LoginRequest field value if set, zero value otherwise.
@@ -294,6 +288,70 @@ func (o *RegistrationFlow) SetReturnTo(v string) {
 	o.ReturnTo = &v
 }
 
+// GetSessionTokenExchangeCode returns the SessionTokenExchangeCode field value if set, zero value otherwise.
+func (o *RegistrationFlow) GetSessionTokenExchangeCode() string {
+	if o == nil || o.SessionTokenExchangeCode == nil {
+		var ret string
+		return ret
+	}
+	return *o.SessionTokenExchangeCode
+}
+
+// GetSessionTokenExchangeCodeOk returns a tuple with the SessionTokenExchangeCode field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RegistrationFlow) GetSessionTokenExchangeCodeOk() (*string, bool) {
+	if o == nil || o.SessionTokenExchangeCode == nil {
+		return nil, false
+	}
+	return o.SessionTokenExchangeCode, true
+}
+
+// HasSessionTokenExchangeCode returns a boolean if a field has been set.
+func (o *RegistrationFlow) HasSessionTokenExchangeCode() bool {
+	if o != nil && o.SessionTokenExchangeCode != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSessionTokenExchangeCode gets a reference to the given string and assigns it to the SessionTokenExchangeCode field.
+func (o *RegistrationFlow) SetSessionTokenExchangeCode(v string) {
+	o.SessionTokenExchangeCode = &v
+}
+
+// GetTransientPayload returns the TransientPayload field value if set, zero value otherwise.
+func (o *RegistrationFlow) GetTransientPayload() map[string]interface{} {
+	if o == nil || o.TransientPayload == nil {
+		var ret map[string]interface{}
+		return ret
+	}
+	return o.TransientPayload
+}
+
+// GetTransientPayloadOk returns a tuple with the TransientPayload field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RegistrationFlow) GetTransientPayloadOk() (map[string]interface{}, bool) {
+	if o == nil || o.TransientPayload == nil {
+		return nil, false
+	}
+	return o.TransientPayload, true
+}
+
+// HasTransientPayload returns a boolean if a field has been set.
+func (o *RegistrationFlow) HasTransientPayload() bool {
+	if o != nil && o.TransientPayload != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTransientPayload gets a reference to the given map[string]interface{} and assigns it to the TransientPayload field.
+func (o *RegistrationFlow) SetTransientPayload(v map[string]interface{}) {
+	o.TransientPayload = v
+}
+
 // GetType returns the Type field value
 func (o *RegistrationFlow) GetType() string {
 	if o == nil {
@@ -356,8 +414,8 @@ func (o RegistrationFlow) MarshalJSON() ([]byte, error) {
 	if true {
 		toSerialize["issued_at"] = o.IssuedAt
 	}
-	if o.Oauth2LoginChallenge.IsSet() {
-		toSerialize["oauth2_login_challenge"] = o.Oauth2LoginChallenge.Get()
+	if o.Oauth2LoginChallenge != nil {
+		toSerialize["oauth2_login_challenge"] = o.Oauth2LoginChallenge
 	}
 	if o.Oauth2LoginRequest != nil {
 		toSerialize["oauth2_login_request"] = o.Oauth2LoginRequest
@@ -367,6 +425,12 @@ func (o RegistrationFlow) MarshalJSON() ([]byte, error) {
 	}
 	if o.ReturnTo != nil {
 		toSerialize["return_to"] = o.ReturnTo
+	}
+	if o.SessionTokenExchangeCode != nil {
+		toSerialize["session_token_exchange_code"] = o.SessionTokenExchangeCode
+	}
+	if o.TransientPayload != nil {
+		toSerialize["transient_payload"] = o.TransientPayload
 	}
 	if true {
 		toSerialize["type"] = o.Type

@@ -7,8 +7,13 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/ory/kratos/x"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/ory/kratos/x/events"
+
 	"github.com/ory/x/otelx"
+
+	"github.com/ory/kratos/x"
 
 	"github.com/ory/kratos/driver/config"
 
@@ -31,6 +36,7 @@ type (
 	managerDependencies interface {
 		config.Provider
 		PoolProvider
+		PrivilegedPoolProvider
 		x.TracingProvider
 		courier.Provider
 		ValidationProvider
@@ -84,7 +90,38 @@ func (m *Manager) Create(ctx context.Context, i *Identity, opts ...ManagerOption
 		return err
 	}
 
-	return m.r.IdentityPool().(PrivilegedPool).CreateIdentity(ctx, i)
+	if err := m.r.PrivilegedIdentityPool().CreateIdentity(ctx, i); err != nil {
+		return err
+	}
+
+	trace.SpanFromContext(ctx).AddEvent(events.NewIdentityCreated(ctx, i.ID))
+	return nil
+}
+
+func (m *Manager) CreateIdentities(ctx context.Context, identities []*Identity, opts ...ManagerOption) (err error) {
+	ctx, span := m.r.Tracer(ctx).Tracer().Start(ctx, "identity.Manager.CreateIdentities")
+	defer otelx.End(span, &err)
+
+	for _, i := range identities {
+		if i.SchemaID == "" {
+			i.SchemaID = m.r.Config().DefaultIdentityTraitsSchemaID(ctx)
+		}
+
+		o := newManagerOptions(opts)
+		if err := m.ValidateIdentity(ctx, i, o); err != nil {
+			return err
+		}
+	}
+
+	if err := m.r.PrivilegedIdentityPool().CreateIdentities(ctx, identities...); err != nil {
+		return err
+	}
+
+	for _, i := range identities {
+		trace.SpanFromContext(ctx).AddEvent(events.NewIdentityCreated(ctx, i.ID))
+	}
+
+	return nil
 }
 
 func (m *Manager) requiresPrivilegedAccess(ctx context.Context, original, updated *Identity, o *ManagerOptions) (err error) {
@@ -118,7 +155,7 @@ func (m *Manager) Update(ctx context.Context, updated *Identity, opts ...Manager
 		return err
 	}
 
-	original, err := m.r.IdentityPool().(PrivilegedPool).GetIdentityConfidential(ctx, updated.ID)
+	original, err := m.r.PrivilegedIdentityPool().GetIdentityConfidential(ctx, updated.ID)
 	if err != nil {
 		return err
 	}
@@ -127,7 +164,7 @@ func (m *Manager) Update(ctx context.Context, updated *Identity, opts ...Manager
 		return err
 	}
 
-	return m.r.IdentityPool().(PrivilegedPool).UpdateIdentity(ctx, updated)
+	return m.r.PrivilegedIdentityPool().UpdateIdentity(ctx, updated)
 }
 
 func (m *Manager) UpdateSchemaID(ctx context.Context, id uuid.UUID, schemaID string, opts ...ManagerOption) (err error) {
@@ -135,7 +172,7 @@ func (m *Manager) UpdateSchemaID(ctx context.Context, id uuid.UUID, schemaID str
 	defer otelx.End(span, &err)
 
 	o := newManagerOptions(opts)
-	original, err := m.r.IdentityPool().(PrivilegedPool).GetIdentityConfidential(ctx, id)
+	original, err := m.r.PrivilegedIdentityPool().GetIdentityConfidential(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -149,7 +186,8 @@ func (m *Manager) UpdateSchemaID(ctx context.Context, id uuid.UUID, schemaID str
 		return err
 	}
 
-	return m.r.IdentityPool().(PrivilegedPool).UpdateIdentity(ctx, original)
+	trace.SpanFromContext(ctx).AddEvent(events.NewIdentityUpdated(ctx, id))
+	return m.r.PrivilegedIdentityPool().UpdateIdentity(ctx, original)
 }
 
 func (m *Manager) SetTraits(ctx context.Context, id uuid.UUID, traits Traits, opts ...ManagerOption) (_ *Identity, err error) {
@@ -157,7 +195,7 @@ func (m *Manager) SetTraits(ctx context.Context, id uuid.UUID, traits Traits, op
 	defer otelx.End(span, &err)
 
 	o := newManagerOptions(opts)
-	original, err := m.r.IdentityPool().(PrivilegedPool).GetIdentityConfidential(ctx, id)
+	original, err := m.r.PrivilegedIdentityPool().GetIdentityConfidential(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +223,8 @@ func (m *Manager) UpdateTraits(ctx context.Context, id uuid.UUID, traits Traits,
 		return err
 	}
 
-	return m.r.IdentityPool().(PrivilegedPool).UpdateIdentity(ctx, updated)
+	trace.SpanFromContext(ctx).AddEvent(events.NewIdentityUpdated(ctx, id))
+	return m.r.PrivilegedIdentityPool().UpdateIdentity(ctx, updated)
 }
 
 func (m *Manager) ValidateIdentity(ctx context.Context, i *Identity, o *ManagerOptions) (err error) {
