@@ -149,6 +149,11 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login
 	}
 
 	i.Traits = newTraits
+	if i.Credentials == nil {
+		i.Credentials = make(map[identity.CredentialsType]identity.Credentials)
+	}
+
+	i.Credentials[identity.CredentialsTypeOIDC] = *c
 
 	err = s.d.PrivilegedIdentityPool().UpdateIdentity(r.Context(), i)
 	if err != nil {
