@@ -22,11 +22,13 @@ import (
 )
 
 type EcontIdentityResponse struct {
-	Issuer   string `json:"iss,omitempty"`
-	Subject  string `json:"sub,omitempty"`
-	Email    string `json:"email,omitempty"`
-	Name     string `json:"name,omitempty"`
-	Username string `json:"user_name,omitempty"`
+	Issuer      string `json:"iss,omitempty"`
+	Subject     string `json:"sub,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Username    string `json:"user_name,omitempty"`
+	AccessToken string `json:"access_token,omitempty"`
+	ExpiresIn   int    `json:"expires_in,omitempty"`
 	// Users    []map[string]interface{} `json:"users,omitempty"`
 }
 
@@ -185,11 +187,13 @@ func (g *ProviderEcont) Claims(ctx context.Context, exchange *oauth2.Token, quer
 	}
 
 	claims := &Claims{
-		Issuer:   endpoint.String(),
-		Subject:  correctSubject,
-		Username: data.Username,
-		Name:     data.Name,
-		Email:    data.Email,
+		Issuer:      endpoint.String(),
+		Subject:     correctSubject,
+		Username:    data.Username,
+		Name:        data.Name,
+		Email:       data.Email,
+		AccessToken: exchange.AccessToken,
+		ExpiresIn:   exchange.Expiry.Unix(),
 	}
 	// claims.RawClaims = rawClaims
 	return claims, nil

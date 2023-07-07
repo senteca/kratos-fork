@@ -6,6 +6,8 @@ local claims = std.extVar('claims');
       email: claims.user_name,
       user_name: claims.user_name,
       name: claims.name,
+      access_token: claims.access_token,
+      expires_in: claims.expires_in,
     },
   },
 }

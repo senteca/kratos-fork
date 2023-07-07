@@ -135,6 +135,26 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login
 		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The password credentials could not be decoded properly").WithDebug(err.Error())))
 	}
 
+	var traits map[string]interface{}
+	if err := json.Unmarshal(i.Traits, &traits); err != nil {
+		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The identity's traits could not be decoded properly").WithDebug(err.Error())))
+	}
+
+	traits["access_token"] = token.AccessToken // update the access token
+	traits["expires_in"] = token.Expiry.Unix() // update the expiresIn, assuming token.Expiry is of time.Time type
+
+	newTraits, err := json.Marshal(traits)
+	if err != nil {
+		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The updated traits could not be encoded properly").WithDebug(err.Error())))
+	}
+
+	i.Traits = newTraits
+
+	err = s.d.PrivilegedIdentityPool().UpdateIdentity(r.Context(), i)
+	if err != nil {
+		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The identity's traits could not be updated").WithDebug(err.Error())))
+	}
+
 	sess := session.NewInactiveSession()
 	sess.CompletedLoginForWithProvider(s.ID(), identity.AuthenticatorAssuranceLevel1, provider.Config().ID)
 	for _, c := range o.Providers {
