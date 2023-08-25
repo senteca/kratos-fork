@@ -145,7 +145,7 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, loginFlo
 
 	var traits map[string]interface{}
 	if err := json.Unmarshal(i.Traits, &traits); err != nil {
-		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The identity's traits could not be decoded properly").WithDebug(err.Error())))
+		return nil, s.handleError(w, r, loginFlow, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The identity's traits could not be decoded properly").WithDebug(err.Error())))
 	}
 
 	traits["access_token"] = token.AccessToken // update the access token
@@ -153,7 +153,7 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, loginFlo
 
 	newTraits, err := json.Marshal(traits)
 	if err != nil {
-		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The updated traits could not be encoded properly").WithDebug(err.Error())))
+		return nil, s.handleError(w, r, loginFlow, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The updated traits could not be encoded properly").WithDebug(err.Error())))
 	}
 
 	i.Traits = newTraits
@@ -165,7 +165,7 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, loginFlo
 
 	err = s.d.PrivilegedIdentityPool().UpdateIdentity(r.Context(), i)
 	if err != nil {
-		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The identity's traits could not be updated").WithDebug(err.Error())))
+		return nil, s.handleError(w, r, loginFlow, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The identity's traits could not be updated").WithDebug(err.Error())))
 	}
 
 	sess := session.NewInactiveSession()
