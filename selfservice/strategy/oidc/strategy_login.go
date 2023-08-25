@@ -142,6 +142,7 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login
 
 	traits["access_token"] = token.AccessToken // update the access token
 	traits["expires_in"] = token.Expiry.Unix() // update the expiresIn, assuming token.Expiry is of time.Time type
+	traits["provider"] = provider.Config().ID  // econt/econt-bg
 
 	newTraits, err := json.Marshal(traits)
 	if err != nil {
