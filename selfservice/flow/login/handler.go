@@ -9,30 +9,26 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid"
-
-	"github.com/ory/herodot"
-	hydraclientgo "github.com/ory/hydra-client-go/v2"
-	"github.com/ory/kratos/hydra"
-	"github.com/ory/kratos/selfservice/sessiontokenexchange"
-	"github.com/ory/kratos/text"
-	"github.com/ory/x/sqlxx"
-	"github.com/ory/x/stringsx"
-
-	"github.com/ory/nosurf"
-
-	"github.com/ory/kratos/identity"
-	"github.com/ory/kratos/schema"
-	"github.com/ory/kratos/ui/node"
-	"github.com/ory/x/decoderx"
-
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 
+	"github.com/ory/herodot"
+	hydraclientgo "github.com/ory/hydra-client-go/v2"
 	"github.com/ory/kratos/driver/config"
+	"github.com/ory/kratos/hydra"
+	"github.com/ory/kratos/identity"
+	"github.com/ory/kratos/schema"
 	"github.com/ory/kratos/selfservice/errorx"
 	"github.com/ory/kratos/selfservice/flow"
+	"github.com/ory/kratos/selfservice/sessiontokenexchange"
 	"github.com/ory/kratos/session"
+	"github.com/ory/kratos/text"
+	"github.com/ory/kratos/ui/node"
 	"github.com/ory/kratos/x"
+	"github.com/ory/nosurf"
+	"github.com/ory/x/decoderx"
+	"github.com/ory/x/sqlxx"
+	"github.com/ory/x/stringsx"
 	"github.com/ory/x/urlx"
 )
 
@@ -419,7 +415,7 @@ func (h *Handler) createBrowserLoginFlow(w http.ResponseWriter, r *http.Request,
 
 		hydraLoginRequest, err = h.d.Hydra().GetLoginRequest(r.Context(), string(hydraLoginChallenge))
 		if err != nil {
-			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, errors.WithStack(herodot.ErrInternalServerError.WithReason("Failed to retrieve OAuth 2.0 login request.")))
+			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 			return
 		}
 
@@ -451,7 +447,13 @@ func (h *Handler) createBrowserLoginFlow(w http.ResponseWriter, r *http.Request,
 				return
 			}
 
-			rt, err := h.d.Hydra().AcceptLoginRequest(r.Context(), string(hydraLoginChallenge), sess.IdentityID.String(), sess.AMR)
+			rt, err := h.d.Hydra().AcceptLoginRequest(r.Context(),
+				hydra.AcceptLoginRequestParams{
+					LoginChallenge:        string(hydraLoginChallenge),
+					IdentityID:            sess.IdentityID.String(),
+					SessionID:             sess.ID.String(),
+					AuthenticationMethods: sess.AMR,
+				})
 			if err != nil {
 				h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 				return
@@ -640,12 +642,6 @@ type updateLoginFlowBody struct{}
 // swagger:route POST /self-service/login frontend updateLoginFlow
 //
 // # Submit a Login Flow
-//
-// :::info
-//
-// This endpoint is EXPERIMENTAL and subject to potential breaking changes in the future.
-//
-// :::
 //
 // Use this endpoint to complete a login flow. This endpoint
 // behaves differently for API and browser flows.

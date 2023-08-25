@@ -154,7 +154,7 @@ func NewFlow(conf *config.Config, exp time.Duration, csrf string, r *http.Reques
 	}, nil
 }
 
-func (f Flow) TableName(ctx context.Context) string {
+func (f Flow) TableName(context.Context) string {
 	return "selfservice_registration_flows"
 }
 

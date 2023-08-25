@@ -22,6 +22,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 
+	"github.com/ory/x/sqlxx"
 	"github.com/ory/x/urlx"
 
 	"github.com/ory/kratos/driver/config"
@@ -105,6 +106,12 @@ type FlowOption func(f *Flow)
 func WithFlowReturnTo(returnTo string) FlowOption {
 	return func(f *Flow) {
 		f.ReturnTo = returnTo
+	}
+}
+
+func WithFlowOAuth2LoginChallenge(loginChallenge string) FlowOption {
+	return func(f *Flow) {
+		f.OAuth2LoginChallenge = sqlxx.NullString(loginChallenge)
 	}
 }
 
@@ -266,12 +273,6 @@ type createBrowserRegistrationFlow struct {
 //
 // This endpoint initializes a browser-based user registration flow. This endpoint will set the appropriate
 // cookies and anti-CSRF measures required for browser-based flows.
-//
-// :::info
-//
-// This endpoint is EXPERIMENTAL and subject to potential breaking changes in the future.
-//
-// :::
 //
 // If this endpoint is opened as a link in the browser, it will be redirected to
 // `selfservice.flows.registration.ui_url` with the flow ID set as the query parameter `?flow=`. If a valid user session

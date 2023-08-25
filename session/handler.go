@@ -173,7 +173,7 @@ type toSession struct {
 // - if the `Authorization: bearer <ory-session-token>` HTTP header was set with a valid Ory Kratos Session Token;
 // - if the `X-Session-Token` HTTP header was set with a valid Ory Kratos Session Token.
 //
-// If none of these headers are set or the cooke or token are invalid, the endpoint returns a HTTP 401 status code.
+// If none of these headers are set or the cookie or token are invalid, the endpoint returns a HTTP 401 status code.
 //
 // As explained above, this request may fail due to several reasons. The `error.id` can be one of:
 //
@@ -190,7 +190,7 @@ type toSession struct {
 //	  401: errorGeneric
 //	  403: errorGeneric
 //	  default: errorGeneric
-func (h *Handler) whoami(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (h *Handler) whoami(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	s, err := h.r.SessionManager().FetchFromRequest(r.Context(), r)
 	c := h.r.Config()
 	if err != nil {
@@ -205,7 +205,10 @@ func (h *Handler) whoami(w http.ResponseWriter, r *http.Request, ps httprouter.P
 	}
 
 	var aalErr *ErrAALNotSatisfied
-	if err := h.r.SessionManager().DoesSessionSatisfy(r, s, c.SessionWhoAmIAAL(r.Context())); errors.As(err, &aalErr) {
+	if err := h.r.SessionManager().DoesSessionSatisfy(r, s, c.SessionWhoAmIAAL(r.Context()),
+		// For the time being we want to update the AAL in the database if it is unset.
+		UpsertAAL,
+	); errors.As(err, &aalErr) {
 		h.r.Audit().WithRequest(r).WithError(err).Info("Session was found but AAL is not satisfied for calling this endpoint.")
 		h.r.Writer().WriteError(w, r, err)
 		return

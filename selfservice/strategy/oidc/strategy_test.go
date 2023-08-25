@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ory/kratos/hydra"
 	"github.com/ory/kratos/selfservice/sessiontokenexchange"
 	"github.com/ory/kratos/session"
 	"github.com/ory/x/snapshotx"
@@ -241,12 +242,12 @@ func TestStrategy(t *testing.T) {
 		assert.Equal(t, claims.metadataPublic.picture, gjson.GetBytes(body, "identity.metadata_public.picture").String(), "%s", body)
 	}
 
-	var newLoginFlow = func(t *testing.T, redirectTo string, exp time.Duration, flowType flow.Type) (req *login.Flow) {
+	var newLoginFlow = func(t *testing.T, requestURL string, exp time.Duration, flowType flow.Type) (req *login.Flow) {
 		// Use NewLoginFlow to instantiate the request but change the things we need to control a copy of it.
 		req, _, err := reg.LoginHandler().NewLoginFlow(httptest.NewRecorder(),
-			&http.Request{URL: urlx.ParseOrPanic(redirectTo)}, flowType)
+			&http.Request{URL: urlx.ParseOrPanic(requestURL)}, flowType)
 		require.NoError(t, err)
-		req.RequestURL = redirectTo
+		req.RequestURL = requestURL
 		req.ExpiresAt = time.Now().Add(exp)
 		require.NoError(t, reg.LoginFlowPersister().UpdateLoginFlow(context.Background(), req))
 
@@ -552,16 +553,32 @@ func TestStrategy(t *testing.T) {
 	})
 
 	t.Run("case=login without registered account with return_to", func(t *testing.T) {
-		subject = "login-without-register-return-to@ory.sh"
-		scope = []string{"openid"}
-		returnTo := "/foo"
 
 		t.Run("case=should pass login", func(t *testing.T) {
+			subject = "login-without-register-return-to@ory.sh"
+			scope = []string{"openid"}
+			returnTo := "/foo"
 			r := newBrowserLoginFlow(t, fmt.Sprintf("%s?return_to=%s", returnTS.URL, returnTo), time.Minute)
 			action := assertFormValues(t, r.ID, "valid")
 			res, body := makeRequest(t, "valid", action, url.Values{})
 			assert.True(t, strings.HasSuffix(res.Request.URL.String(), returnTo))
 			assertIdentity(t, res, body)
+		})
+
+		t.Run("case=should pass login and carry over login_challenge to registration", func(t *testing.T) {
+			subject = "login_challenge_carry_over@ory.sh"
+			scope = []string{"openid"}
+			conf.MustSet(ctx, config.ViperKeyOAuth2ProviderURL, "http://fake-hydra")
+
+			reg.WithHydra(hydra.NewFake())
+			r := newBrowserLoginFlow(t, fmt.Sprintf("%s?login_challenge=%s", returnTS.URL, hydra.FakeValidLoginChallenge), time.Minute)
+			action := assertFormValues(t, r.ID, "valid")
+			fv := url.Values{}
+			fv.Set("provider", "valid")
+			res, err := testhelpers.NewClientWithCookieJar(t, nil, false).PostForm(action, fv)
+			require.NoError(t, err)
+			// Expect to be returned to the hydra instance, that instantiated the request
+			assert.Equal(t, hydra.FakePostLoginURL, res.Request.URL.String())
 		})
 	})
 
@@ -784,6 +801,49 @@ func TestStrategy(t *testing.T) {
 
 			// upstream parameters that are not on the allow list will be ignored and not passed on to the upstream provider.
 			require.Empty(t, loc.Query().Get("lol"))
+		})
+	})
+
+	t.Run("case=verified addresses should be respected", func(t *testing.T) {
+		scope = []string{"openid"}
+
+		testhelpers.SetDefaultIdentitySchema(conf, "file://./stub/registration-verifiable-email.schema.json")
+
+		var assertVerifiedEmail = func(t *testing.T, body []byte, verified bool) {
+			assert.Len(t, gjson.GetBytes(body, "identity.verifiable_addresses").Array(), 1, "%s", body)
+			assert.Equal(t, "email", gjson.GetBytes(body, "identity.verifiable_addresses.0.via").String(), "%s", body)
+			assert.Equal(t, subject, gjson.GetBytes(body, "identity.verifiable_addresses.0.value").String(), "%s", body)
+			assert.Equal(t, verified, gjson.GetBytes(body, "identity.verifiable_addresses.0.verified").Bool(), "%s", body)
+		}
+
+		t.Run("case=should have verified address when subject matches", func(t *testing.T) {
+			subject = "verified-email@ory.sh"
+			r := newBrowserRegistrationFlow(t, returnTS.URL, time.Minute)
+			action := assertFormValues(t, r.ID, "valid")
+			res, body := makeRequest(t, "valid", action, url.Values{})
+			assertIdentity(t, res, body)
+			assertVerifiedEmail(t, body, true)
+		})
+
+		t.Run("case=should have verified address when subject matches after normalization", func(t *testing.T) {
+			subject = " Denormalized-Verified-Email@ory.sh "
+			r := newBrowserRegistrationFlow(t, returnTS.URL, time.Minute)
+			action := assertFormValues(t, r.ID, "valid")
+			res, body := makeRequest(t, "valid", action, url.Values{"traits.subject": {"denormalized-verified-EMAIL@ory.sh"}})
+			subject = "denormalized-verified-EMAIL@ory.sh"
+			assertIdentity(t, res, body)
+			subject = "denormalized-verified-email@ory.sh"
+			assertVerifiedEmail(t, body, true)
+		})
+
+		t.Run("case=should have unverified address when subject does not match", func(t *testing.T) {
+			subject = "changed-verified-email@ory.sh"
+			r := newBrowserRegistrationFlow(t, returnTS.URL, time.Minute)
+			action := assertFormValues(t, r.ID, "valid")
+			res, body := makeRequest(t, "valid", action, url.Values{"traits.subject": {"unverified-email@ory.sh"}})
+			subject = "unverified-email@ory.sh"
+			assertIdentity(t, res, body)
+			assertVerifiedEmail(t, body, false)
 		})
 	})
 

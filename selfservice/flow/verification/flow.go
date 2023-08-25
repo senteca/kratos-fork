@@ -17,6 +17,7 @@ import (
 
 	"github.com/ory/kratos/driver/config"
 	"github.com/ory/kratos/selfservice/flow"
+	"github.com/ory/kratos/session"
 	"github.com/ory/kratos/ui/container"
 	"github.com/ory/kratos/x"
 	"github.com/ory/x/sqlxx"
@@ -79,6 +80,10 @@ type Flow struct {
 	// required: true
 	State State `json:"state" faker:"-" db:"state"`
 
+	// OAuth2LoginChallenge holds the login challenge originally set during the registration flow.
+	OAuth2LoginChallenge sqlxx.NullString `json:"-" db:"oauth2_login_challenge"`
+	OAuth2LoginChallengeParams
+
 	// CSRFToken contains the anti-csrf token associated with this request.
 	CSRFToken string `json:"-" db:"csrf_token"`
 
@@ -89,6 +94,18 @@ type Flow struct {
 	NID       uuid.UUID `json:"-"  faker:"-" db:"nid"`
 }
 
+type OAuth2LoginChallengeParams struct {
+	// SessionID holds the session id if set from a registraton hook.
+	SessionID uuid.NullUUID `json:"-" faker:"-" db:"session_id"`
+
+	// IdentityID holds the identity id if set from a registraton hook.
+	IdentityID uuid.NullUUID `json:"-" faker:"-" db:"identity_id"`
+
+	// AMR contains a list of authentication methods that were used to verify the
+	// session if set from a registration hook.
+	AMR session.AuthenticationMethods `db:"authentication_methods" json:"-"`
+}
+
 func (f *Flow) GetType() flow.Type {
 	return f.Type
 }
@@ -97,7 +114,7 @@ func (f *Flow) GetRequestURL() string {
 	return f.RequestURL
 }
 
-func (f Flow) TableName(ctx context.Context) string {
+func (f Flow) TableName(context.Context) string {
 	return "selfservice_verification_flows"
 }
 

@@ -42,6 +42,8 @@ func init() {
 
 	messages = map[string]*text.Message{
 		"NewInfoNodeLabelVerifyOTP":                  text.NewInfoNodeLabelVerifyOTP(),
+		"NewInfoNodeLabelVerificationCode":           text.NewInfoNodeLabelVerificationCode(),
+		"NewInfoNodeLabelRecoveryCode":               text.NewInfoNodeLabelRecoveryCode(),
 		"NewInfoNodeInputPassword":                   text.NewInfoNodeInputPassword(),
 		"NewInfoNodeLabelGenerated":                  text.NewInfoNodeLabelGenerated("{title}"),
 		"NewInfoNodeLabelSave":                       text.NewInfoNodeLabelSave(),
@@ -95,6 +97,7 @@ func init() {
 		"NewErrorValidationPasswordPolicyViolation":               text.NewErrorValidationPasswordPolicyViolation("{reason}"),
 		"NewErrorValidationInvalidCredentials":                    text.NewErrorValidationInvalidCredentials(),
 		"NewErrorValidationDuplicateCredentials":                  text.NewErrorValidationDuplicateCredentials(),
+		"NewErrorValidationDuplicateCredentialsWithHints":         text.NewErrorValidationDuplicateCredentialsWithHints("{reason}", nil, nil, ""),
 		"NewErrorValidationDuplicateCredentialsOnOIDCLink":        text.NewErrorValidationDuplicateCredentialsOnOIDCLink(),
 		"NewErrorValidationTOTPVerifierWrong":                     text.NewErrorValidationTOTPVerifierWrong(),
 		"NewErrorValidationLookupAlreadyUsed":                     text.NewErrorValidationLookupAlreadyUsed(),
