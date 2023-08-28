@@ -84,7 +84,7 @@ type UpdateLoginFlowWithOidcMethod struct {
 }
 
 func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, loginFlow *login.Flow, token *oauth2.Token, claims *Claims, provider Provider, container *authCodeContainer) (*registration.Flow, error) {
-	i, c, err := s.d.PrivilegedIdentityPool().FindByCredentialsIdentifier(r.Context(), identity.CredentialsTypeOIDC, identity.OIDCUniqueID(provider.Config().ID, claims.Subject))
+	ii, c, err := s.d.PrivilegedIdentityPool().FindByCredentialsIdentifier(r.Context(), identity.CredentialsTypeOIDC, identity.OIDCUniqueID(provider.Config().ID, claims.Subject))
 	if err != nil {
 		if errors.Is(err, sqlcon.ErrNoRows) {
 			// If no account was found we're "manually" creating a new registration flow and redirecting the browser
@@ -138,6 +138,8 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, loginFlo
 		return nil, s.handleError(w, r, loginFlow, provider.Config().ID, nil, err)
 	}
 
+	i, err := s.d.PrivilegedIdentityPool().GetIdentityConfidential(r.Context(), ii.ID)
+
 	var oidcCredentials identity.CredentialsOIDC
 	if err := json.NewDecoder(bytes.NewBuffer(c.Config)).Decode(&oidcCredentials); err != nil {
 		return nil, s.handleError(w, r, loginFlow, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The password credentials could not be decoded properly").WithDebug(err.Error())))
@@ -156,13 +158,7 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, loginFlo
 	if err != nil {
 		return nil, s.handleError(w, r, loginFlow, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The updated traits could not be encoded properly").WithDebug(err.Error())))
 	}
-
 	i.Traits = newTraits
-	if i.Credentials == nil {
-		i.Credentials = make(map[identity.CredentialsType]identity.Credentials)
-	}
-
-	i.Credentials[identity.CredentialsTypeOIDC] = *c
 
 	err = s.d.PrivilegedIdentityPool().UpdateIdentity(r.Context(), i)
 	if err != nil {
