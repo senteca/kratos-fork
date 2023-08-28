@@ -10,10 +10,9 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/ory/herodot"
 	"github.com/ory/kratos/driver/config"
 	"github.com/ory/kratos/ui/container"
-
-	"github.com/ory/herodot"
 	"github.com/ory/kratos/x"
 
 	"github.com/gofrs/uuid"

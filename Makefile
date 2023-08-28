@@ -52,7 +52,7 @@ docs/swagger:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -d -b .bin v1.52.2
 
 .bin/hydra: Makefile
-	bash <(curl https://raw.githubusercontent.com/ory/meta/master/install.sh) -d -b .bin hydra v2.0.2
+	bash <(curl https://raw.githubusercontent.com/ory/meta/master/install.sh) -d -b .bin hydra v2.2.0-rc.3
 
 .bin/ory: Makefile
 	curl https://raw.githubusercontent.com/ory/meta/master/install.sh | bash -s -- -b .bin ory v0.2.2
@@ -191,7 +191,7 @@ migrations-sync: .bin/ory
 
 .PHONY: test-update-snapshots
 test-update-snapshots:
-	UPDATE_SNAPSHOTS=true go test -p 4 -tags sqlite -short ./...
+	UPDATE_SNAPSHOTS=true go test -tags sqlite,json1,refresh -short ./...
 
 .PHONY: post-release
 post-release: .bin/yq

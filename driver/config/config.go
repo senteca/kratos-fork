@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duo-labs/webauthn/protocol"
-	"github.com/duo-labs/webauthn/webauthn"
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofrs/uuid"
 	"github.com/inhies/go-bytesize"
 	kjson "github.com/knadh/koanf/parsers/json"
@@ -66,6 +66,8 @@ const (
 	ViperKeyCourierTemplatesVerificationValidEmail           = "courier.templates.verification.valid.email"
 	ViperKeyCourierTemplatesVerificationCodeInvalidEmail     = "courier.templates.verification_code.invalid.email"
 	ViperKeyCourierTemplatesVerificationCodeValidEmail       = "courier.templates.verification_code.valid.email"
+	ViperKeyCourierDeliveryStrategy                          = "courier.delivery_strategy"
+	ViperKeyCourierHTTPRequestConfig                         = "courier.http.request_config"
 	ViperKeyCourierSMTPFrom                                  = "courier.smtp.from_address"
 	ViperKeyCourierSMTPFromName                              = "courier.smtp.from_name"
 	ViperKeyCourierSMTPHeaders                               = "courier.smtp.headers"
@@ -115,6 +117,7 @@ const (
 	ViperKeySelfServiceBrowserDefaultReturnTo                = "selfservice." + DefaultBrowserReturnURL
 	ViperKeyURLsAllowedReturnToDomains                       = "selfservice.allowed_return_urls"
 	ViperKeySelfServiceRegistrationEnabled                   = "selfservice.flows.registration.enabled"
+	ViperKeySelfServiceRegistrationLoginHints                = "selfservice.flows.registration.login_hints"
 	ViperKeySelfServiceRegistrationUI                        = "selfservice.flows.registration.ui_url"
 	ViperKeySelfServiceRegistrationRequestLifespan           = "selfservice.flows.registration.lifespan"
 	ViperKeySelfServiceRegistrationAfter                     = "selfservice.flows.registration.after"
@@ -176,7 +179,7 @@ const (
 	ViperKeyWebAuthnRPDisplayName                            = "selfservice.methods.webauthn.config.rp.display_name"
 	ViperKeyWebAuthnRPID                                     = "selfservice.methods.webauthn.config.rp.id"
 	ViperKeyWebAuthnRPOrigin                                 = "selfservice.methods.webauthn.config.rp.origin"
-	ViperKeyWebAuthnRPIcon                                   = "selfservice.methods.webauthn.config.rp.issuer"
+	ViperKeyWebAuthnRPOrigins                                = "selfservice.methods.webauthn.config.rp.origins"
 	ViperKeyWebAuthnPasswordless                             = "selfservice.methods.webauthn.config.passwordless"
 	ViperKeyOAuth2ProviderURL                                = "oauth2_provider.url"
 	ViperKeyOAuth2ProviderHeader                             = "oauth2_provider.headers"
@@ -255,6 +258,8 @@ type (
 		Config() *Config
 	}
 	CourierConfigs interface {
+		CourierEmailStrategy(ctx context.Context) string
+		CourierEmailRequestConfig(ctx context.Context) json.RawMessage
 		CourierSMTPURL(ctx context.Context) (*url.URL, error)
 		CourierSMTPClientCertPath(ctx context.Context) string
 		CourierSMTPClientKeyPath(ctx context.Context) string
@@ -337,6 +342,7 @@ func New(ctx context.Context, l *logrusx.Logger, stdOutOrErr io.Writer, opts ...
 		configx.WithStderrValidationReporter(),
 		configx.OmitKeysFromTracing("dsn", "courier.smtp.connection_uri", "secrets.default", "secrets.cookie", "secrets.cipher", "client_secret"),
 		configx.WithImmutables("serve", "profiling", "log"),
+		configx.WithExceptImmutables("serve.public.cors.allowed_origins"),
 		configx.WithLogrusWatcher(l),
 		configx.WithLogger(l),
 		configx.WithContext(ctx),
@@ -622,6 +628,10 @@ func (p *Config) ClientHTTPPrivateIPExceptionURLs(ctx context.Context) []string 
 
 func (p *Config) SelfServiceFlowRegistrationEnabled(ctx context.Context) bool {
 	return p.GetProvider(ctx).Bool(ViperKeySelfServiceRegistrationEnabled)
+}
+
+func (p *Config) SelfServiceFlowRegistrationLoginHints(ctx context.Context) bool {
+	return p.GetProvider(ctx).Bool(ViperKeySelfServiceRegistrationLoginHints)
 }
 
 func (p *Config) SelfServiceFlowVerificationEnabled(ctx context.Context) bool {
@@ -976,6 +986,29 @@ func (p *Config) SelfServiceFlowLogoutRedirectURL(ctx context.Context) *url.URL 
 	return p.GetProvider(ctx).RequestURIF(ViperKeySelfServiceLogoutBrowserDefaultReturnTo, p.SelfServiceBrowserDefaultReturnTo(ctx))
 }
 
+func (p *Config) CourierEmailStrategy(ctx context.Context) string {
+	return p.GetProvider(ctx).String(ViperKeyCourierDeliveryStrategy)
+}
+
+func (p *Config) CourierEmailRequestConfig(ctx context.Context) json.RawMessage {
+	if p.CourierEmailStrategy(ctx) != "http" {
+		return nil
+	}
+
+	out, err := p.GetProvider(ctx).Marshal(kjson.Parser())
+	if err != nil {
+		p.l.WithError(err).Warn("Unable to marshal mailer request configuration.")
+		return nil
+	}
+
+	config := gjson.GetBytes(out, ViperKeyCourierHTTPRequestConfig).Raw
+	if len(config) <= 0 {
+		return json.RawMessage("{}")
+	}
+
+	return json.RawMessage(config)
+}
+
 func (p *Config) CourierSMTPClientCertPath(ctx context.Context) string {
 	return p.GetProvider(ctx).StringF(ViperKeyCourierSMTPClientCertPath, "")
 }
@@ -1078,7 +1111,7 @@ func (p *Config) CourierSMSRequestConfig(ctx context.Context) json.RawMessage {
 
 	out, err := p.GetProvider(ctx).Marshal(kjson.Parser())
 	if err != nil {
-		p.l.WithError(err).Warn("Unable to marshal self service strategy configuration.")
+		p.l.WithError(err).Warn("Unable to marshal SMS request configuration.")
 		return nil
 	}
 
@@ -1337,14 +1370,18 @@ func (p *Config) WebAuthnForPasswordless(ctx context.Context) bool {
 }
 
 func (p *Config) WebAuthnConfig(ctx context.Context) *webauthn.Config {
+	scheme := p.SelfPublicURL(ctx).Scheme
+	id := p.GetProvider(ctx).String(ViperKeyWebAuthnRPID)
+	origin := p.GetProvider(ctx).String(ViperKeyWebAuthnRPOrigin)
+	origins := p.GetProvider(ctx).StringsF(ViperKeyWebAuthnRPOrigins, []string{stringsx.Coalesce(origin, scheme+"://"+id)})
 	return &webauthn.Config{
 		RPDisplayName: p.GetProvider(ctx).String(ViperKeyWebAuthnRPDisplayName),
-		RPID:          p.GetProvider(ctx).String(ViperKeyWebAuthnRPID),
-		RPOrigin:      p.GetProvider(ctx).String(ViperKeyWebAuthnRPOrigin),
-		RPIcon:        p.GetProvider(ctx).String(ViperKeyWebAuthnRPIcon),
+		RPID:          id,
+		RPOrigins:     origins,
 		AuthenticatorSelection: protocol.AuthenticatorSelection{
 			UserVerification: protocol.VerificationDiscouraged,
 		},
+		EncodeUserIDAsString: false,
 	}
 }
 

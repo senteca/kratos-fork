@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/ory/x/contextx"
@@ -390,6 +391,16 @@ func (m *RegistryDefault) WithConfig(c *config.Config) Registry {
 	return m
 }
 
+// WithSelfserviceStrategies is only available in testing and overrides the
+// selfservice strategies with the given ones.
+func (m *RegistryDefault) WithSelfserviceStrategies(t testing.TB, strategies []any) Registry {
+	if t == nil {
+		panic("Passing selfservice strategies is only supported in testing")
+	}
+	m.selfserviceStrategies = strategies
+	return m
+}
+
 func (m *RegistryDefault) Writer() herodot.Writer {
 	if m.writer == nil {
 		h := herodot.NewJSONWriter(m.Logger())
@@ -615,7 +626,7 @@ func (m *RegistryDefault) Init(ctx context.Context, ctxer contextx.Contextualize
 			m.Logger().WithError(err).Warnf("Unable to open database, retrying.")
 			return errors.WithStack(err)
 		}
-		p, err := sql.NewPersister(ctx, m, c)
+		p, err := sql.NewPersister(ctx, m, c, o.extraMigrations...)
 		if err != nil {
 			m.Logger().WithError(err).Warnf("Unable to initialize persister, retrying.")
 			return err

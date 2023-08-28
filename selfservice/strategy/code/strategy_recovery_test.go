@@ -295,7 +295,7 @@ func createIdentityToRecover(t *testing.T, reg *driver.RegistryDefault, email st
 			"password": {
 				Type:        "password",
 				Identifiers: []string{email},
-				Config:      sqlxx.JSONRawMessage(`{"hashed_password":"foo"}`),
+				Config:      sqlxx.JSONRawMessage(`{"hashed_password":"$2a$08$.cOYmAd.vCpDOoiVJrO5B.hjTLKQQ6cAK40u8uB.FnZDyPvVvQ9Q."}`),
 			},
 		},
 		Traits:   identity.Traits(fmt.Sprintf(`{"email":"%s"}`, email)),
@@ -521,7 +521,7 @@ func TestRecovery(t *testing.T) {
 							Identifiers: []string{testhelpers.RandomEmail()},
 						})
 
-						require.NoError(t, reg.PrivilegedIdentityPool().UpdateIdentity(ctx, id))
+						require.NoError(t, reg.IdentityManager().Update(ctx, id, identity.ManagerAllowWriteProtectedTraits))
 						return testhelpers.InitializeRecoveryFlowViaBrowser(t, client, false, public, url.Values{"return_to": []string{returnTo}})
 					},
 					expectedAAL: "aal2",
@@ -545,7 +545,7 @@ func TestRecovery(t *testing.T) {
 
 					body = checkRecovery(t, client, RecoveryFlowTypeBrowser, email, body)
 
-					assert.Equal(t, text.NewRecoverySuccessful(time.Now().Add(time.Hour)).Text,
+					require.Equal(t, text.NewRecoverySuccessful(time.Now().Add(time.Hour)).Text,
 						gjson.Get(body, "ui.messages.0.text").String())
 
 					settingsId := gjson.Get(body, "id").String()
@@ -1054,6 +1054,72 @@ func TestRecovery(t *testing.T) {
 
 		assert.Empty(t, gjson.Get(body, "ui.nodes.#(attributes.name==code).messages").Array())
 		testhelpers.AssertMessage(t, []byte(body), "The recovery code is invalid or has already been used. Please try again.")
+	})
+
+	t.Run("description=should recover if post recovery hook is successful", func(t *testing.T) {
+		conf.MustSet(ctx, config.HookStrategyKey(config.ViperKeySelfServiceRecoveryAfter, config.HookGlobal), []config.SelfServiceHook{{Name: "err", Config: []byte(`{}`)}})
+		t.Cleanup(func() {
+			conf.MustSet(ctx, config.HookStrategyKey(config.ViperKeySelfServiceRecoveryAfter, config.HookGlobal), nil)
+		})
+
+		recoveryEmail := testhelpers.RandomEmail()
+		createIdentityToRecover(t, reg, recoveryEmail)
+
+		cl := testhelpers.NewClientWithCookies(t)
+		body := expectSuccessfulRecovery(t, cl, RecoveryFlowTypeBrowser, func(v url.Values) {
+			v.Set("email", recoveryEmail)
+		})
+
+		message := testhelpers.CourierExpectMessage(t, reg, recoveryEmail, "Recover access to your account")
+		recoveryCode := testhelpers.CourierExpectCodeInMessage(t, message, 1)
+
+		action := gjson.Get(body, "ui.action").String()
+		require.NotEmpty(t, action)
+		assert.Equal(t, recoveryEmail, gjson.Get(body, "ui.nodes.#(attributes.name==email).attributes.value").String())
+
+		cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+
+		body = submitRecoveryCode(t, cl, body, RecoveryFlowTypeBrowser, recoveryCode, http.StatusSeeOther)
+
+		require.Len(t, cl.Jar.Cookies(urlx.ParseOrPanic(public.URL)), 2)
+		cookies := spew.Sdump(cl.Jar.Cookies(urlx.ParseOrPanic(public.URL)))
+		assert.Contains(t, cookies, "ory_kratos_session")
+	})
+
+	t.Run("description=should not be able to recover if post recovery hook fails", func(t *testing.T) {
+		conf.MustSet(ctx, config.HookStrategyKey(config.ViperKeySelfServiceRecoveryAfter, config.HookGlobal), []config.SelfServiceHook{{Name: "err", Config: []byte(`{"ExecutePostRecoveryHook": "err"}`)}})
+		t.Cleanup(func() {
+			conf.MustSet(ctx, config.HookStrategyKey(config.ViperKeySelfServiceRecoveryAfter, config.HookGlobal), nil)
+		})
+
+		recoveryEmail := testhelpers.RandomEmail()
+		createIdentityToRecover(t, reg, recoveryEmail)
+
+		cl := testhelpers.NewClientWithCookies(t)
+		body := expectSuccessfulRecovery(t, cl, RecoveryFlowTypeBrowser, func(v url.Values) {
+			v.Set("email", recoveryEmail)
+		})
+
+		message := testhelpers.CourierExpectMessage(t, reg, recoveryEmail, "Recover access to your account")
+		recoveryCode := testhelpers.CourierExpectCodeInMessage(t, message, 1)
+
+		action := gjson.Get(body, "ui.action").String()
+		require.NotEmpty(t, action)
+		assert.Equal(t, recoveryEmail, gjson.Get(body, "ui.nodes.#(attributes.name==email).attributes.value").String())
+
+		cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+
+		initialFlowId := gjson.Get(body, "id")
+		body = submitRecoveryCode(t, cl, body, RecoveryFlowTypeBrowser, recoveryCode, http.StatusSeeOther)
+		assert.NotEqual(t, gjson.Get(body, "id"), initialFlowId)
+
+		require.Len(t, cl.Jar.Cookies(urlx.ParseOrPanic(public.URL)), 1)
+		cookies := spew.Sdump(cl.Jar.Cookies(urlx.ParseOrPanic(public.URL)))
+		assert.NotContains(t, cookies, "ory_kratos_session")
 	})
 }
 
