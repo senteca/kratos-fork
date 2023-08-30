@@ -8,6 +8,7 @@ local claims = std.extVar('claims');
       name: claims.name,
       access_token: claims.access_token,
       expires_in: claims.expires_in,
+      provider: "econt",
     },
   },
 }
