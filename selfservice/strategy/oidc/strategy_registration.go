@@ -308,14 +308,22 @@ func (s *Strategy) processRegistration(w http.ResponseWriter, r *http.Request, r
 		return nil, s.handleError(w, r, rf, provider.Config().ID, i.Traits, err)
 	}
 
-	// As we want to update traits
-	lf, err := s.registrationToLogin(w, r, rf, provider.Config().ID)
-	if err != nil {
-		return nil, s.handleError(w, r, rf, provider.Config().ID, nil, err)
+	var traits map[string]interface{}
+	if err := json.Unmarshal(i.Traits, &traits); err != nil {
+		return nil, s.handleError(w, r, rf, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The identity's traits could not be decoded properly").WithDebug(err.Error())))
 	}
 
-	if _, err := s.processLogin(w, r, lf, token, claims, provider, container); err != nil {
-		return lf, s.handleError(w, r, rf, provider.Config().ID, nil, err)
+	traits["provider"] = provider.Config().ID // econt/econt-bg
+
+	newTraits, err := json.Marshal(traits)
+	if err != nil {
+		return nil, s.handleError(w, r, rf, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The updated traits could not be encoded properly").WithDebug(err.Error())))
+	}
+	i.Traits = newTraits
+
+	err = s.d.PrivilegedIdentityPool().UpdateIdentity(r.Context(), i)
+	if err != nil {
+		return nil, s.handleError(w, r, rf, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The identity's traits could not be updated").WithDebug(err.Error())))
 	}
 
 	return nil, nil
